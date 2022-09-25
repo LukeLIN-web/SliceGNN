@@ -72,7 +72,7 @@ def run(rank, world_size, dataset):
 
     train_loader = NeighborSampler(data.edge_index, node_idx=train_idx,
                                    sizes=[25, 10], batch_size=1024,
-                                   shuffle=True, num_workers=0)
+                                   shuffle=True, num_workers=14)
     # 第一层每个node 25个neibor, 第二层每个node 访问10个.
     if rank == 0:
         subgraph_loader = NeighborSampler(data.edge_index, node_idx=None,
@@ -88,33 +88,18 @@ def run(rank, world_size, dataset):
 
     for epoch in range(1, 4):
         model.train()
-        dataloadtime = None 
         start = default_timer()
-        batchsizes = []
-        loadtimes = []
-        gputimes = []
         for batch_size, n_id, adjs in train_loader:
             # print( 'Target node num: {},  sampled node num: {}'.format(batch_size,n_id.shape)) # 基本上都是1024,最后几个是469,
             adjs = [adj.to(rank) for adj in adjs]
-            dataloadtime = default_timer()
             optimizer.zero_grad()
             out = model(x[n_id], adjs)
             loss = F.nll_loss(out, y[n_id[:batch_size]])
             loss.backward() # automatically allreduce gradient
             optimizer.step()
-            stop = default_timer()
-            loadtime = dataloadtime - start
-            end2endtime = stop - start
-            gputime = end2endtime - loadtime
-            batchsizes.append(batch_size)
-            loadtimes.append(loadtime)
-            gputimes.append(gputime)
-            start = default_timer()
-        avgbatchsize = round(mean(batchsizes[5:-5]),)
-        avggputime = round(mean(gputimes[5:-5]) ,4)
-        avgloadtime = round(mean(loadtimes[5:-5]),4)
-        print(f'batch size={avgbatchsize}, batchloadtime={avgloadtime}, '
-                f' gputime = {avggputime} ')
+        stop = default_timer()
+        end2endtime = stop - start
+        print(  f' one epoch time  = {end2endtime} ')
         dist.barrier()
 
         # if rank == 0:

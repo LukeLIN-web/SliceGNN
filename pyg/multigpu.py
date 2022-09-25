@@ -71,8 +71,9 @@ def run(rank, world_size, dataset):
     train_idx = train_idx.split(train_idx.size(0) // world_size)[rank] # train idx shape is ? 
 
     train_loader = NeighborSampler(data.edge_index, node_idx=train_idx,
-                                   sizes=[25, 10], batch_size=1024,
-                                   shuffle=True, num_workers=0)
+                                #    sizes=[25, 10], batch_size=1024,
+                                    sizes=[25, 10], batch_size=512,
+                                   shuffle=True, num_workers=14)
     # 第一层每个node 25个neibor, 第二层每个node 访问10个.
     if rank == 0:
         subgraph_loader = NeighborSampler(data.edge_index, node_idx=None,
@@ -136,7 +137,7 @@ def run(rank, world_size, dataset):
 
 
 if __name__ == '__main__':
-    datapath = "/root/share/pytorch_geometric/examples/data/Reddit"
+    datapath = "/root/share/pytorch_geometric/data/Reddit"
     dataset = Reddit(datapath)
 
     parser = argparse.ArgumentParser()
