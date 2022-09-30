@@ -14,12 +14,12 @@ multigpu(){
 
 
 test(){
-    # multigpu 4
-    # multigpu 2
-    # multigpu 1
-    epochtimetest 4
-    epochtimetest 2
-    epochtimetest 1
+    multigpu 4
+    multigpu 2
+    multigpu 1
+    # epochtimetest 4
+    # epochtimetest 2
+    # epochtimetest 1
 }
 
 

@@ -111,11 +111,12 @@ def run(rank, world_size, dataset):
             loadtimes.append(loadtime)
             gputimes.append(gputime)
             start = default_timer()
-        avgbatchsize = round(mean(batchsizes[5:-5]),)
-        avggputime = round(mean(gputimes[5:-5]) ,4)
-        avgloadtime = round(mean(loadtimes[5:-5]),4)
-        print(f'batch size={avgbatchsize}, batchloadtime={avgloadtime}, '
-                f' gputime = {avggputime} ')
+        # avgbatchsize = round(mean(batchsizes[5:-5]),)
+        # avggputime = round(mean(gputimes[5:-5]) ,4)
+        # avgloadtime = round(mean(loadtimes[5:-5]),4)
+        # print(f'batch size={avgbatchsize}, batchloadtime={avgloadtime}, '
+        #         f' gputime = {avggputime} ')
+        print(f'gputime={sum(gputimes)}, loadtime={sum(loadtimes)}, ')
         dist.barrier()
 
         # if rank == 0:
