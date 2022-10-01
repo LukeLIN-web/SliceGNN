@@ -1,5 +1,6 @@
+from torch import Tensor
+from typing import List, NamedTuple, Optional, Tuple
 from timeit import default_timer
-from torch_geometric.loader import EdgeIndex, Adj
 from torch_geometric.nn import SAGEConv
 from torch_geometric.loader import NeighborSampler
 from torch_geometric.datasets import Reddit
@@ -14,6 +15,17 @@ from statistics import mean
 
 import torch
 torch.set_printoptions(profile="full")
+
+
+class EdgeIndex(NamedTuple):
+    edge_index: Tensor
+    e_id: Optional[Tensor]
+    size: Tuple[int, int]
+
+    def to(self, *args, **kwargs):
+        edge_index = self.edge_index.to(*args, **kwargs)
+        e_id = self.e_id.to(*args, **kwargs) if self.e_id is not None else None
+        return EdgeIndex(edge_index, e_id, self.size)
 
 
 class SAGE(torch.nn.Module):
@@ -62,53 +74,44 @@ class SAGE(torch.nn.Module):
         return x_all
 
 
-def getSublayer(batch_size, n_id, adjs : "int, list[torch.long], list[ EdgeIndex]") -> "tuple[int,list[torch.long], list[ EdgeIndex]]":
-    # 首先取lay1的32个中的, 然后再取 layer2中的 source.
-    # print( 'Target node num: {},  sampled node num: {}'.format(batch_size,n_id.shape)) # 基本上都是1024,最后几个是469,
-    # 取出对应的adjs
-    sub_batch_size  = args.num_nodes//2
-    print(n_id.shape)  # 64*25*10 , 有14821
-    layer1 = adjs[0]
-    print(layer1.edge_index.shape)
-    layer1 = adjs[1]
-    print(layer1.edge_index[0])
-    print(layer1.edge_index[1])
-    print(layer1.edge_index.dtype)
+def getSublayer(batch_size: int, n_id: "list[torch.long]", adjs: "list[ EdgeIndex]", args) -> "tuple[int,list[torch.long], list[ EdgeIndex]]":
+    sub_batch_size = args.num_nodes//2
+    layer0, layer1 = adjs[0], adjs[1]
+    # print(layer1.edge_index[0])
     # layer1 process
-    sublayer1_target = []  # subgraph have args.num_nodes
-    sublayer1_source = []
-    sublayer1_e_id = []
+    sublayer1_target, sublayer1_source, sublayer1_e_id = [], [], []  # subgraph have args.num_nodes
     sublayer1_size = [0, sub_batch_size]
     i = 0
-    while len(sublayer1_target) < sub_batch_size:
-        if sublayer1_target[-1] != (layer1.edge_index[1])[i]:
-            sublayer1_target.append((layer1.edge_index[1])[i])
-            sublayer1_source.append((layer1.edge_index[0])[i])
-            sublayer1_e_id.append(layer1.e_id[i])
-            sublayer1_size[0] += 1
+    target_node = set()
+    while len(target_node) < sub_batch_size:
+        sublayer1_target.append((layer1.edge_index[1])[i].item())
+        target_node.add((layer1.edge_index[1])[i].item())
+        sublayer1_source.append((layer1.edge_index[0])[i].item())
+        sublayer1_e_id.append(layer1.e_id[i].item())
+        sublayer1_size[0] += 1
         i += 1
-    layer1_edge_index = torch.tensor(
+    sublayer1_edge_index = torch.tensor(
         [sublayer1_source, sublayer1_target], dtype=layer1.edge_index.dtype)
-    subadj1 = EdgeIndex(layer1_edge_index, sublayer1_e_id, sublayer1_size)
-    # layer2 process
-    sublayer2_target = []  # subgraph have args.num_nodes
-    sublayer2_source = []
-    sublayer2_e_id = []
-    sublayer2_size = [0, sub_batch_size]
+    subadj1 = EdgeIndex(sublayer1_edge_index, torch.tensor(
+        sublayer1_e_id), tuple(sublayer1_size))
+    # layer0 process
+    sublayer0_source, sublayer0_target, sublayer0_e_id = [], [], []  # subgraph have args.num_nodes
+    sublayer0_size = [0, sublayer1_size[0]]
     i = 0
-    while len(sublayer2_target) < sub_batch_size:
-        if sublayer2_target[-1] != (layer1.edge_index[1])[i]:
-            sublayer2_target.append((layer1.edge_index[1])[i])
-            sublayer2_source.append((layer1.edge_index[0])[i])
-            sublayer2_e_id.append(layer1.e_id[i])
-            sublayer2_size[0] += 1
+    target_node.clear()
+    while len(target_node) < sublayer1_size[0]:
+        sublayer0_target.append((layer0.edge_index[1])[i].item())
+        target_node.add((layer0.edge_index[1])[i].item())
+        sublayer0_source.append((layer0.edge_index[0])[i].item())
+        sublayer0_e_id.append(layer0.e_id[i].item())
+        sublayer0_size[0] += 1
         i += 1
-    layer1_edge_index = torch.tensor(
-        [sublayer2_source, sublayer2_target], dtype=layer1.edge_index.dtype)
-    subadj1 = EdgeIndex(layer1_edge_index, sublayer2_e_id, sublayer2_size)
-    sub_adjs = [subadj1,subadj2]
-
-    return args.num_nodes//2, sub_n_id, sub_adjs
+    sublayer0_edge_index = torch.tensor(
+        [sublayer0_source, sublayer0_target], dtype=layer0.edge_index.dtype)
+    subadj0 = EdgeIndex(sublayer0_edge_index, torch.tensor(
+        sublayer0_e_id), tuple(sublayer0_size))
+    sub_adjs = [subadj0, subadj1]
+    return args.num_nodes//2, torch.tensor(sublayer0_source), sub_adjs
 
 
 def run(dataset, args):
@@ -123,27 +126,34 @@ def run(dataset, args):
     #                                       shuffle=False, num_workers=6)
     # 第一层每个node 25个neibor, 第二层每个node 访问10个.
     torch.manual_seed(12345)
-    rank = torch.device('cuda:0')
-    model = SAGE(dataset.num_features, 256, dataset.num_classes).to(rank)
+    # rank = torch.device('cuda:0')
+    # model = SAGE(dataset.num_features, 256, dataset.num_classes).to(rank)
+    model = SAGE(dataset.num_features, 256, dataset.num_classes)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
-    x, y = data.x.to(rank), data.y.to(rank)
-
+    # x, y = data.x.to(rank), data.y.to(rank)
+    x,y = data.x,data.y 
     for epoch in range(1, 4):
         model.train()
         for batch_size, n_id, adjs in train_loader:
-            sub_batch_size, sub_n_id, sub_adjs = getSublayer(batch_size,n_id,adjs,args)
-            adjs = [adj.to(rank) for adj in adjs]
-            optimizer.zero_grad()
-            out = model(x[n_id], adjs)
-            loss = F.nll_loss(out, y[n_id[:batch_size]])
-            loss.backward()
-            optimizer.step()
+            sub_batch_size, sub_n_id, sub_adjs = getSublayer(batch_size, n_id, adjs, args)
+            # adjs = [adj.to(rank) for adj in adjs]
+            # optimizer.zero_grad()
+            # out = model(x[n_id], adjs)
+            # print(out.shape)
+            # print(out.dtype)
+            # exit()
+            # loss = F.nll_loss(out, y[n_id[:batch_size]])
+            # loss.backward()
+            # optimizer.step()
 
             # our sub graph
-            sub_adjs = [adj.to(rank) for adj in sub_adjs]
-            optimizer.zero_grad()
-            out = model(x[sub_n_id], sub_adjs)
+            # sub_adjs = [adj.to(rank) for adj in sub_adjs]
+            # import pdb
+            # pdb.set_trace()
+            suygraphout = model(x[sub_n_id], sub_adjs)
+            # print(batch_size)
+            # result = torch.allclose(suygraphout,out)
 
         # print(f'Epoch: {epoch:03d}, Loss: {loss:.4f}')
 
