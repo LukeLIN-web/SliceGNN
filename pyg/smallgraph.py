@@ -1,4 +1,4 @@
-import imp
+from functools import reduce
 from torch import Tensor
 from typing import List, NamedTuple, Optional, Tuple
 from timeit import default_timer
@@ -12,7 +12,6 @@ from statistics import mean
 
 import torch
 torch.set_printoptions(profile="full")
-from functools import reduce
 
 
 class EdgeIndex(NamedTuple):
@@ -72,7 +71,6 @@ class SAGE(torch.nn.Module):
         return x_all
 
 
-
 def getSublayer(batch_size: int, n_id: "list[torch.long]", adjs: "list[ EdgeIndex]", args) -> "tuple[int,list[torch.long], list[ EdgeIndex]]":
     sub_batch_size = args.num_nodes//2
     layer0, layer1 = adjs[0], adjs[1]
@@ -106,7 +104,8 @@ def getSublayer(batch_size: int, n_id: "list[torch.long]", adjs: "list[ EdgeInde
     sublayer0_e_id = torch.index_select(layer0.e_id, 0, indices)
     sublayer0_size = (i, sublayer1_size[0])
     sublayer0_edge_index = torch.stack((sublayer0_source, sublayer0_target), 0)
-    subadj0 = EdgeIndex(sublayer0_edge_index, sublayer0_e_id, tuple(sublayer0_size))
+    subadj0 = EdgeIndex(sublayer0_edge_index,
+                        sublayer0_e_id, tuple(sublayer0_size))
     sub_adjs = [subadj0, subadj1]
     return args.num_nodes//2, sublayer0_source, sub_adjs
 
@@ -116,27 +115,24 @@ def run(data, args):
     train_loader = NeighborSampler(data.edge_index, node_idx=train_idx,
                                    sizes=[-1, -1], batch_size=args.num_nodes,
                                    shuffle=True, num_workers=0)
-    [-1,-1]# 采集所有nerighbor, 画一个10个点的图. 一个采样6个
-    # 手动取出3个,
-    # subgraph_loader = NeighborSampler(data.edge_index, node_idx=None,
-    #                                       sizes=[-1], batch_size=2048,
-    #                                       shuffle=False, num_workers=6)
-    # 第一层每个node 25个neibor, 第二层每个node 访问10个.
-    torch.manual_seed(12345)
+
     # rank = torch.device('cuda:0')
     # model = SAGE(dataset.num_features, 256, dataset.num_classes).to(rank)
-    model = SAGE(dataset.num_features, 256, dataset.num_classes)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    num_features = 1
+    model = SAGE(num_features, 256, 2)
+    # optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
     # x, y = data.x.to(rank), data.y.to(rank)
-    x, y = data.x, data.y
+    # x, y = data.x, data.y
+    x = data.x
     for epoch in range(1, 4):
         model.train()
         for batch_size, n_id, adjs in train_loader:
-            sub_batch_size, sub_n_id, sub_adjs = getSublayer(batch_size, n_id, adjs, args)
+            # sub_batch_size, sub_n_id, sub_adjs = getSublayer(
+            #     batch_size, n_id, adjs, args)
             # adjs = [adj.to(rank) for adj in adjs]
             # optimizer.zero_grad()
-            # out = model(x[n_id], adjs)
+            out = model(x[n_id], adjs)
             # print(out.shape)
             # print(out.dtype)
             # exit()
@@ -148,19 +144,20 @@ def run(data, args):
             # sub_adjs = [adj.to(rank) for adj in sub_adjs]
             # import pdb
             # pdb.set_trace()
-            suygraphout = model(x[sub_n_id], sub_adjs)
-            # forward 两次 model
-            # merge() 手动合起来. 
+            # suygraphout = model(x[sub_n_id], sub_adjs)
+            # forward 两次 model . merge() 手动合起来.
             # result = torch.allclose(suygraphout,out)
             # 求L2 distance. print .
+            # torch.cdist(out,suygraphout,p=2)
 
 
-0,0,1,1,1,2,2,2,3,3,3,4,4,4,5,5,6,6,6,7,7,7,8,8,8,9,9,9
-1,6,0,2,6,1,3,7,2,4,8,3,5,9,4,9,0,1,7,2,6,8,3,7,9,4,5,8
+# 0,0,1,1,1,2,2,2,3,3,3,4,4,4,5,5,6,6,6,7,7,7,8,8,8,9,9,9
+# 1,6,0,2,6,1,3,7,2,4,8,3,5,9,4,9,0,1,7,2,6,8,3,7,9,4,5,8
 if __name__ == '__main__':
-    edge_index = torch.tensor([[0,0,1,1,1,2,2,2,3,3,3,4,4,4,5,5,6,6,6,7,7,7,8,8,8,9,9,9],
-                            [1,6,0,2,6,1,3,7,2,4,8,3,5,9,4,9,0,1,7,2,6,8,3,7,9,4,5,8]], dtype=torch.long)
-    x = torch.tensor([[1], [2], [3],[4],[5],[6],[7],[8],[9],[10] ], dtype=torch.float)
+    edge_index = torch.tensor([[0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9],
+                               [1, 6, 0, 2, 6, 1, 3, 7, 2, 4, 8, 3, 5, 9, 4, 9, 0, 1, 7, 2, 6, 8, 3, 7, 9, 4, 5, 8]], dtype=torch.long)
+    x = torch.tensor([[1], [2], [3], [4], [5], [6], [7],
+                     [8], [9], [10]], dtype=torch.float)
 
     data = Data(x=x, edge_index=edge_index)
 
