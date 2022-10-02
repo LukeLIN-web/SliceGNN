@@ -1,16 +1,13 @@
+import imp
 from torch import Tensor
 from typing import List, NamedTuple, Optional, Tuple
 from timeit import default_timer
 from torch_geometric.nn import SAGEConv
 from torch_geometric.loader import NeighborSampler
-from torch_geometric.datasets import Reddit
+from torch_geometric.data import Data
 from tqdm import tqdm
-from torch.nn.parallel import DistributedDataParallel
 import torch.nn.functional as F
-import torch.multiprocessing as mp
-import torch.distributed as dist
 import argparse
-import os
 from statistics import mean
 
 import torch
@@ -114,12 +111,10 @@ def getSublayer(batch_size: int, n_id: "list[torch.long]", adjs: "list[ EdgeInde
     return args.num_nodes//2, sublayer0_source, sub_adjs
 
 
-def run(dataset, args):
-    data = dataset[0]
-    train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
-
+def run(data, args):
+    train_idx = torch.ones(10)
     train_loader = NeighborSampler(data.edge_index, node_idx=train_idx,
-                                   sizes=[25, 10], batch_size=args.num_nodes,
+                                   sizes=[-1, -1], batch_size=args.num_nodes,
                                    shuffle=True, num_workers=0)
     [-1,-1]# 采集所有nerighbor, 画一个10个点的图. 一个采样6个
     # 手动取出3个,
@@ -159,27 +154,18 @@ def run(dataset, args):
             # result = torch.allclose(suygraphout,out)
             # 求L2 distance. print .
 
-        # print(f'Epoch: {epoch:03d}, Loss: {loss:.4f}')
 
-        # if epoch % 1 == 0:  # We evaluate on a single GPU for now
-        # # if False:
-        #     model.eval()
-        #     with torch.no_grad():
-        #         out = model.module.inference(x, rank, subgraph_loader)
-        #     res = out.argmax(dim=-1) == data.y
-
-        #     acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
-        #     acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
-        #     acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
-        #     print(f'Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}')
-
-
+0,0,1,1,1,2,2,2,3,3,3,4,4,4,5,5,6,6,6,7,7,7,8,8,8,9,9,9
+1,6,0,2,6,1,3,7,2,4,8,3,5,9,4,9,0,1,7,2,6,8,3,7,9,4,5,8
 if __name__ == '__main__':
-    datapath = "/root/share/pytorch_geometric/examples/data/Reddit"
-    dataset = Reddit(datapath)
+    edge_index = torch.tensor([[0,0,1,1,1,2,2,2,3,3,3,4,4,4,5,5,6,6,6,7,7,7,8,8,8,9,9,9],
+                            [1,6,0,2,6,1,3,7,2,4,8,3,5,9,4,9,0,1,7,2,6,8,3,7,9,4,5,8]], dtype=torch.long)
+    x = torch.tensor([[1], [2], [3],[4],[5],[6],[7],[8],[9],[10] ], dtype=torch.float)
+
+    data = Data(x=x, edge_index=edge_index)
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--num_nodes', type=int, default=64)
+    parser.add_argument('--num_nodes', type=int, default=6)
     args = parser.parse_args()
 
-    run(dataset, args)
+    run(data, args)
