@@ -121,7 +121,7 @@ def run(dataset, args):
     train_loader = NeighborSampler(data.edge_index, node_idx=train_idx,
                                    sizes=[25, 10], batch_size=args.num_nodes,
                                    shuffle=True, num_workers=0)
-    [-1,-1]# 采集所有nerighbor, 画一个10个点的图. 一个采样6个
+    # [-1,-1]# 采集所有nerighbor, 画一个10个点的图. 一个采样6个
     # 手动取出3个,
     # subgraph_loader = NeighborSampler(data.edge_index, node_idx=None,
     #                                       sizes=[-1], batch_size=2048,

@@ -77,12 +77,12 @@ def getSublayer(batch_size: int, n_id: "list[torch.long]", adjs: "list[ EdgeInde
     # print(layer1.edge_index[0])
     # layer1 process
     i = 0
-    target_node = set()
-    indices = []
-    while len(target_node) < sub_batch_size:
-        target_node.add((layer1.edge_index[1])[i].item())
-        indices.append(i)
-        i += 1  # subgraph have args.num_nodes
+    # target_node = set()
+    # indices = []
+    # while len(target_node) < sub_batch_size:
+    #     target_node.add((layer1.edge_index[1])[i].item())
+    #     indices.append(i)
+    #     i += 1  # subgraph have args.num_nodes
     indices = torch.tensor(indices)
     sublayer1_size = (i, sub_batch_size)
     sublayer1_target = torch.index_select(layer1.edge_index[1], 0, indices)
@@ -111,7 +111,7 @@ def getSublayer(batch_size: int, n_id: "list[torch.long]", adjs: "list[ EdgeInde
 
 
 def run(data, args):
-    train_idx = torch.ones(10)
+    train_idx = torch.tensor([0,1,2,3,4,5,6,7,8,9])
     train_loader = NeighborSampler(data.edge_index, node_idx=train_idx,
                                    sizes=[-1, -1], batch_size=args.num_nodes,
                                    shuffle=True, num_workers=0)
@@ -128,26 +128,23 @@ def run(data, args):
     for epoch in range(1, 4):
         model.train()
         for batch_size, n_id, adjs in train_loader:
-            # sub_batch_size, sub_n_id, sub_adjs = getSublayer(
-            #     batch_size, n_id, adjs, args)
+            sub_batch_size, sub_n_id, sub_adjs = getSublayer(
+                batch_size, n_id, adjs, args)
             # adjs = [adj.to(rank) for adj in adjs]
             # optimizer.zero_grad()
             out = model(x[n_id], adjs)
             # print(out.shape)
             # print(out.dtype)
-            # exit()
             # loss = F.nll_loss(out, y[n_id[:batch_size]])
             # loss.backward()
             # optimizer.step()
 
             # our sub graph
             # sub_adjs = [adj.to(rank) for adj in sub_adjs]
-            # import pdb
-            # pdb.set_trace()
-            # suygraphout = model(x[sub_n_id], sub_adjs)
+            suygraphout = model(x[sub_n_id], sub_adjs)
             # forward 两次 model . merge() 手动合起来.
             # result = torch.allclose(suygraphout,out)
-            # 求L2 distance. print .
+            # 求L2 distance. print
             # torch.cdist(out,suygraphout,p=2)
 
 
@@ -160,7 +157,8 @@ if __name__ == '__main__':
                      [8], [9], [10]], dtype=torch.float)
 
     data = Data(x=x, edge_index=edge_index)
-
+    # print(data.x.shape) #torch.Size([10, 1])
+    # print(data.x.dtype) # torch.float32
     parser = argparse.ArgumentParser()
     parser.add_argument('--num_nodes', type=int, default=6)
     args = parser.parse_args()
