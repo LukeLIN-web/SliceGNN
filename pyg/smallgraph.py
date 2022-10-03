@@ -90,14 +90,14 @@ def getSublayer(batch_size: int, n_id: "list[torch.long]", adjs: "list[ EdgeInde
     sublayer1_e_id = torch.index_select(layer1.e_id, 0, indices)
     sublayer1_edge_index = torch.stack((sublayer1_source, sublayer1_target), 0)
     subadj1 = EdgeIndex(sublayer1_edge_index, sublayer1_e_id, sublayer1_size)
-    # layer0 process
-    indices = []
-    target_node.clear()
-    i = 0
-    while len(target_node) < sublayer1_size[0]:
-        target_node.add((layer0.edge_index[1])[i].item())
-        indices.append(i)
-        i += 1
+    # # layer0 process
+    # indices = []
+    # target_node.clear()
+    # i = 0
+    # while len(target_node) < sublayer1_size[0]:
+    #     target_node.add((layer0.edge_index[1])[i].item())
+    #     indices.append(i)
+    #     i += 1
     indices = torch.tensor(indices)
     sublayer0_target = torch.index_select(layer0.edge_index[1], 0, indices)
     sublayer0_source = torch.index_select(layer0.edge_index[0], 0, indices)
