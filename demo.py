@@ -1,4 +1,7 @@
 
+import matplotlib.pyplot as plt
+import networkx as nx
+from functools import reduce
 from torch import Tensor
 from typing import List, NamedTuple, Optional, Tuple
 from timeit import default_timer
@@ -16,36 +19,10 @@ from statistics import mean
 
 import torch
 torch.set_printoptions(profile="full")
-from functools import reduce
 
-# datapath = "/root/share/pytorch_geometric/examples/data/Reddit"
-# dataset = Reddit(datapath)
-
-#torch.Size([10, 1])
-# torch.float32
-# data = dataset[0]
-# test = data.x
-# print(test.shape)
-# print(test.dtype)
-a = torch.tensor([[ 4.],
-        [ 6.],
-        [ 7.],
-        [ 3.],
-        [ 4.],
-        [ 8.],
-        [ 2.],
-        [ 8.],
-        [ 1.],
-        [ 2.],
-        [ 9.],
-        [ 6.],
-        [ 7.],
-        [10.],
-        [ 1.],
-        [ 5.],
-        [10.],
-        [ 1.]])
-indices = torch.tensor([0, 2])
-# b = a.index_select(-2,indices)
-b = a[:,:1]
-print(b)
+G = nx.Graph()
+G.add_nodes_from([i for i in range(10)])
+e = zip(range(0, 3), range(1, 4))
+G.add_edges_from(e)
+nx.draw(G, pos=nx.circular_layout(G), node_color='r', edge_color='b')
+plt.savefig("Graph.png", format="PNG")
