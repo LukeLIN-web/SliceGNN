@@ -135,7 +135,23 @@ def get_microbatch(
     return microbatchs
 
 
-def run(data: Data,  args):
+def twohop(data: Data,  args):
+    kwargs = {'batch_size': 4, 'num_workers': 0}
+    train_loader = NeighborLoader(
+        data, num_neighbors=[2,2], shuffle=False, **kwargs)
+    num_features = 1
+    num_classes = 1
+    model = SAGE(num_features, 256, num_classes)
+    assert data.validate() == True
+    for epoch in range(1, 2):
+        model.train()
+        for batch_idx, batch in enumerate(train_loader):
+            assert batch.edge_index.tolist() == [[1, 6, 0, 2, 6, 1, 3, 7, 2, 4, 8, 3, 5, 9, 4, 9],
+                                                 [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5]]
+        
+
+
+def onehop(data: Data,  args):
     kwargs = {'batch_size': 6, 'num_workers': 0}
     train_loader = NeighborLoader(
         data, num_neighbors=[-1], shuffle=False, **kwargs)
@@ -163,12 +179,12 @@ def run(data: Data,  args):
             out = model(batch.x, batch.edge_index)
             out = out[:batch.batch_size]
             leftout = model(leftbatch.x, leftbatch.edge_index)
-            leftout = leftout[:leftbatch.batch_size]
+            leftout = torch.index_select(leftout, 0, leftbatch.n_id[:leftbatch.batch_size] )
             rightout = model(rightbatch.x, rightbatch.edge_index)
-            rightout = rightout[:rightbatch.batch_size]
+            rightout = torch.index_select(rightout, 0, rightbatch.n_id[:rightbatch.batch_size] )
             subgraphout = torch.cat((leftout, rightout), 0)
-            print(torch.abs((out - subgraphout).mean()))
-            # assert torch.abs((out - subgraphout).mean()) < 0.01
+            assert torch.abs((out - subgraphout).mean()) < 0.01
+            print(out)
 
 
 # 0,0,1,1,1,2,2,2,3,3,3,4,4,4,5,5,6,6,6,7,7,7,8,8,8,9,9,9
@@ -184,4 +200,5 @@ if __name__ == '__main__':
     parser.add_argument('--num_nodes', type=int, default=6)
     args = parser.parse_args()
 
-    run(data, args)
+    onehop(data, args)
+    # twohop(data, args)
