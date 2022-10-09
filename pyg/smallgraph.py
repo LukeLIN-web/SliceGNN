@@ -126,6 +126,7 @@ def get_microbatch(
     microbatchs = []
     for i in range(num_microbatch):
         subset = batch.n_id[i * microbach_size:(i + 1) * microbach_size]
+        
         smallset, edge_index, edge_mask = ourk_hop_subgraph(
             subset, hop, batch.edge_index, relabel_nodes=False)
         subdata = Data(x=batch.x, edge_index=edge_index,
@@ -138,7 +139,7 @@ def get_microbatch(
 def twohop(data: Data,  args):
     kwargs = {'batch_size': 4, 'num_workers': 0}
     train_loader = NeighborLoader(
-        data, num_neighbors=[2,2], shuffle=False, **kwargs)
+        data, num_neighbors=[-1,-1], shuffle=False, **kwargs)
     num_features = 1
     num_classes = 1
     model = SAGE(num_features, 256, num_classes)
@@ -146,15 +147,35 @@ def twohop(data: Data,  args):
     for epoch in range(1, 2):
         model.train()
         for batch_idx, batch in enumerate(train_loader):
-            assert batch.edge_index.tolist() == [[1, 6, 0, 2, 6, 1, 3, 7, 2, 4, 8, 3, 5, 9, 4, 9],
-                                                 [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5]]
+            # assert batch.edge_index.tolist() == [[1, 6, 0, 2, 6, 1, 3, 7, 2, 4, 8, 3, 5, 9, 4, 9],
+                                                #  [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5]]
+            hop = 2
+            num_microbatch = 2
+            microbatchs = get_microbatch(batch, hop, num_microbatch)
+            leftbatch, rightbatch = microbatchs[0], microbatchs[1]
+            assert leftbatch.validate() == True
+            assert leftbatch.n_id.tolist() == [0, 1, 2, 3, 6, 7]
+            assert rightbatch.validate() == True
+            assert rightbatch.n_id.tolist() == [3, 4, 5, 2, 8, 9]
+            assert rightbatch.edge_index.tolist() == [[3, 2, 4, 8, 3, 5, 9, 4, 9],
+                                                      [2, 3, 3, 3, 4, 4, 4, 5, 5]]
+            assert leftbatch.edge_index.tolist() == [[1, 6, 0, 2, 6, 1, 3, 7, 2],
+                                                     [0, 0, 1, 1, 1, 2, 2, 2, 3]]
+            out = model(batch.x, batch.edge_index)
+            out = out[:batch.batch_size]
+            leftout = model(leftbatch.x, leftbatch.edge_index)
+            leftout = torch.index_select(leftout, 0, leftbatch.n_id[:leftbatch.batch_size] )
+            rightout = model(rightbatch.x, rightbatch.edge_index)
+            rightout = torch.index_select(rightout, 0, rightbatch.n_id[:rightbatch.batch_size] )
+            subgraphout = torch.cat((leftout, rightout), 0)
+            assert torch.abs((out - subgraphout).mean()) < 0.01
         
 
 
 def onehop(data: Data,  args):
     kwargs = {'batch_size': 6, 'num_workers': 0}
     train_loader = NeighborLoader(
-        data, num_neighbors=[-1], shuffle=False, **kwargs)
+        data, num_neighbors=[4], shuffle=False, **kwargs)
     num_features = 1
     num_classes = 1
     model = SAGE(num_features, 256, num_classes)
@@ -200,5 +221,5 @@ if __name__ == '__main__':
     parser.add_argument('--num_nodes', type=int, default=6)
     args = parser.parse_args()
 
-    onehop(data, args)
-    # twohop(data, args)
+    # onehop(data, args)
+    twohop(data, args)
