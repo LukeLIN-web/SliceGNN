@@ -60,14 +60,12 @@ def slice_adj(
     This mimics the natural flow of message passing in Graph Neural Networks.
 
     The method returns (1) the nodes involved in the subgraph, (2) the filtered
-    :obj:`edge_index` connectivity, (3) the mapping from node indices in
-    :obj:`node_idx` to their new location, and (4) the edge mask indicating
+    :obj:`edge_index` connectivity,  and (3) the edge mask indicating
     which edges were preserved.
 
     Args:
         node_idx (int, list, tuple or :obj:`torch.Tensor`): The central seed
             node(s).
-        num_hops (int): The number of hops :math:`k`.
         edge_index (LongTensor): The edge indices.
         relabel_nodes (bool, optional): If set to :obj:`True`, the resulting
             :obj:`edge_index` will be relabeled to hold consecutive indices
@@ -78,7 +76,7 @@ def slice_adj(
             aggregation (:obj:`"source_to_target"` or
             :obj:`"target_to_source"`). (default: :obj:`"source_to_target"`)
 
-    :rtype: (:class:`LongTensor`, :class:`LongTensor`, :class:`LongTensor`,
+    :rtype: (:class:`LongTensor`, :class:`LongTensor`, 
              :class:`BoolTensor`)
     """
 
@@ -147,12 +145,14 @@ def get_micro_batch(
 
     :rtype: List[namedtuple('micro_batch', ['bach_size', 'nid', 'adjs'])]
     """
-    assert batch_size % num_micro_batch == 0
+    micro_batch = namedtuple('micro_batch', ['bach_size', 'nid', 'adjs'])
     n_id = torch.arange(len(n_id))  # relabel for mini batch
+    if batch_size < num_micro_batch:
+        return [micro_batch(batch_size, n_id, adjs)]
+    assert batch_size % num_micro_batch == 0
     adjs.reverse()
     micro_batch_size = batch_size // num_micro_batch     # TODO: or padding last batch
     micro_batchs = []
-    micro_batch = namedtuple('micro_batch', ['bach_size', 'nid', 'adjs'])
     for i in range(num_micro_batch):
         sub_nid = n_id[i * micro_batch_size:(i + 1) * micro_batch_size]
         subadjs = []
@@ -163,13 +163,6 @@ def get_micro_batch(
             subadjs.append(EdgeIndex(sub_adjs, None, (
                 len(sub_nid), target_size)))
         subadjs.reverse()  # O(n)
-        # layer1, layer2 = subadjs[0], subadjs[1]
-        # assert layer1.size == (6,4)
-        # assert layer2.size == (4,2)
-        # assert sub_nid.tolist() == [0,1,2,4,3,5]
-        # assert layer1.edge_index.tolist() == [[1, 4, 0, 2, 4, 1, 3, 5, 0, 1, 5],
-        #                                                  [0, 0, 1, 1, 1, 2, 2, 2, 4, 4, 4]]
-        # assert layer2.edge_index.tolist() == [[1, 4, 0, 2, 4], [0, 0, 1, 1, 1]]
         micro_batchs.append(micro_batch(micro_batch_size, sub_nid, subadjs))
     return micro_batchs
 
@@ -190,7 +183,8 @@ def two_hop(data: Data):
                                        batch_size, num_micro_batch)
         subgraphout = []
         for micro_batch in micro_batchs:
-            subgraphout.append( model(x[n_id][micro_batch.nid], micro_batch.adjs))
+            subgraphout.append(
+                model(x[n_id][micro_batch.nid], micro_batch.adjs))
         subgraphout = torch.cat(subgraphout, 0)
         assert torch.abs((out - subgraphout).mean()) < 0.01
 

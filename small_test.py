@@ -5,8 +5,6 @@ import torch
 from sampler.get_micro_batch import *
 
 
-
-
 def test_two_hop():
     edge_index = torch.tensor([[0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9],
                                [1, 6, 0, 2, 6, 1, 3, 7, 2, 4, 8, 3, 5, 9, 4, 9, 0, 1, 7, 2, 6, 8, 3, 7, 9, 4, 5, 8]], dtype=torch.long)
@@ -19,13 +17,14 @@ def test_two_hop():
     model = SAGE(num_features, hidden_size, num_classes)
     for batch_size, n_id, adjs in train_loader:
         out = model(x[n_id], adjs)
-        num_micro_batch = 2
+        num_micro_batch = 4
         micro_batchs = get_micro_batch(adjs,
                                        n_id,
                                        batch_size, num_micro_batch)
         subgraphout = []
         for micro_batch in micro_batchs:
-            subgraphout.append( model(x[n_id][micro_batch.nid], micro_batch.adjs))
+            subgraphout.append(
+                model(x[n_id][micro_batch.nid], micro_batch.adjs))
         subgraphout = torch.cat(subgraphout, 0)
         assert torch.abs((out - subgraphout).mean()) < 0.01
 
@@ -47,9 +46,10 @@ def test_one_hop():
         micro_batchs = get_micro_batch(adjs,
                                        n_id,
                                        batch_size, num_micro_batch)
-        leftbatch, rightbatch = micro_batchs[0], micro_batchs[1]
         out = model(x[n_id], adjs)
-        leftout = model(x[n_id][leftbatch.nid], leftbatch.adjs)
-        rightout = model(x[n_id][rightbatch.nid], rightbatch.adjs)
-        subgraphout = torch.cat((leftout, rightout), 0)
+        subgraphout = []
+        for micro_batch in micro_batchs:
+            subgraphout.append(
+                model(x[n_id][micro_batch.nid], micro_batch.adjs))
+        subgraphout = torch.cat(subgraphout, 0)
         assert torch.abs((out - subgraphout).mean()) < 0.01
