@@ -2,16 +2,12 @@ from collections import namedtuple
 from functools import reduce
 from torch import Tensor
 from typing import List, NamedTuple, Optional, Tuple, Union
-from timeit import default_timer
 from torch_geometric.nn import SAGEConv
 from torch_geometric.loader import NeighborSampler
 from torch_geometric.data import Data
 from torch_geometric.utils import k_hop_subgraph, subgraph
 from torch_geometric.utils.num_nodes import maybe_num_nodes
-from tqdm import tqdm
 import torch.nn.functional as F
-import argparse
-from statistics import mean
 import torch
 torch.set_printoptions(profile="full")
 
