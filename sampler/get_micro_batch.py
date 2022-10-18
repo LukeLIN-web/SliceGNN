@@ -125,7 +125,8 @@ def slice_adj(
 
     if relabel_nodes:
         node_idx = target.new_full((num_nodes, ), -1)
-        node_idx[subset] = torch.arange(subset.size(0), device=target.device) #tensor([ 0,  1,  2,  3, -1, -1,  4,  5, -1, -1])
+        # tensor([ 0,  1,  2,  3, -1, -1,  4,  5, -1, -1])
+        node_idx[subset] = torch.arange(subset.size(0), device=target.device)
         edge_index = node_idx[edge_index]
 
     return subset, edge_index,  edge_mask
@@ -147,21 +148,21 @@ def get_micro_batch(
     :rtype: List[namedtuple('micro_batch', ['bach_size', 'nid', 'adjs'])]
     """
     assert batch_size % num_micro_batch == 0
-    n_id = torch.arange(len(n_id)) # relabel for mini batch 
-    hop = len(adjs)
+    n_id = torch.arange(len(n_id))  # relabel for mini batch
+    adjs.reverse()
     micro_batch_size = batch_size // num_micro_batch     # TODO: or padding last batch
     micro_batchs = []
     micro_batch = namedtuple('micro_batch', ['bach_size', 'nid', 'adjs'])
     for i in range(num_micro_batch):
         sub_nid = n_id[i * micro_batch_size:(i + 1) * micro_batch_size]
         subadjs = []
-        for j in range(hop):
+        for adj in adjs:
             target_size = len(sub_nid)
             sub_nid, sub_adjs,  edge_mask = slice_adj(
-                sub_nid, adjs[-j-1].edge_index, relabel_nodes=True)  
+                sub_nid, adj.edge_index, relabel_nodes=True)
             subadjs.append(EdgeIndex(sub_adjs, None, (
                 len(sub_nid), target_size)))
-        subadjs.reverse() # O(n)
+        subadjs.reverse()  # O(n)
         # layer1, layer2 = subadjs[0], subadjs[1]
         # assert layer1.size == (6,4)
         # assert layer2.size == (4,2)
@@ -178,27 +179,20 @@ def two_hop(data: Data):
     train_loader = NeighborSampler(data.edge_index,
                                    sizes=hop, batch_size=4,
                                    shuffle=False, num_workers=0)
-    num_features = 1
-    num_classes = 1
+    num_features, hidden_size, num_classes = 1, 16, 1
     x = data.x
-    model = SAGE(num_features, 16, num_classes)
-    for epoch in range(1, 2):
-        model.train()
-        for batch_size, n_id, adjs in train_loader:
-            out = model(x[n_id], adjs)
-            num_micro_batch = 2
-            micro_batchs = get_micro_batch(adjs,
-                                           n_id,
-                                           batch_size, num_micro_batch)
-            leftbatch, rightbatch = micro_batchs[0], micro_batchs[1]
-            # assert rightbatch.nid.tolist() == [2, 3, 4, 5, 8, 9]
-            # assert rightbatch.adjs[0].edge_index.tolist() == [[1, 0, 2, 4, 1, 3, 5, 2, 5],
-            #                                                   [0, 1, 1, 1, 2, 2, 2, 3, 3]]
-            leftout = model(x[n_id][leftbatch.nid], leftbatch.adjs)
-            rightout = model(x[n_id][rightbatch.nid], rightbatch.adjs)
-            subgraphout = torch.cat((leftout, rightout), 0)
-            assert torch.abs((out - subgraphout).mean()) < 0.01
-            print(out)
+    model = SAGE(num_features, hidden_size, num_classes)
+    for batch_size, n_id, adjs in train_loader:
+        out = model(x[n_id], adjs)
+        num_micro_batch = 4
+        micro_batchs = get_micro_batch(adjs,
+                                       n_id,
+                                       batch_size, num_micro_batch)
+        subgraphout = []
+        for micro_batch in micro_batchs:
+            subgraphout.append( model(x[n_id][micro_batch.nid], micro_batch.adjs))
+        subgraphout = torch.cat(subgraphout, 0)
+        assert torch.abs((out - subgraphout).mean()) < 0.01
 
 
 def one_hop(data: Data):
