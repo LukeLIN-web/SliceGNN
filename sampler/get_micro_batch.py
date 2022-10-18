@@ -1,5 +1,4 @@
 from collections import namedtuple
-from functools import reduce
 from torch import Tensor
 from typing import List, NamedTuple, Optional, Tuple, Union
 from torch_geometric.nn import SAGEConv

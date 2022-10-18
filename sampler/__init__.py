@@ -1,4 +1,4 @@
-from .graphsampler import (slice_adj,SAGE,EdgeIndex,get_micro_batch)
+from .get_micro_batch import (slice_adj,SAGE,EdgeIndex,get_micro_batch)
 
 __all__ = [
     'EdgeIndex',
