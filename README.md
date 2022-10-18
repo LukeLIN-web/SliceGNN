@@ -1,4 +1,4 @@
-# gnnprojcet
+# GNN Project
 We implment `gnn_project/pyg/smallgraphsampler.py` 
 
 
