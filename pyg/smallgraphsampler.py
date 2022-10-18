@@ -192,11 +192,10 @@ def two_hop(data: Data):
         for batch_size, n_id, adjs in train_loader:
             out = model(x[n_id], adjs)
             num_micro_batch = 2
-            micro_batchs = get_micro_batch(adjs,  # input biggest graph
+            micro_batchs = get_micro_batch(adjs,
                                            n_id,
                                            batch_size, num_micro_batch)
             leftbatch, rightbatch = micro_batchs[0], micro_batchs[1]
-            print(x[n_id])
             # assert rightbatch.nid.tolist() == [2, 3, 4, 5, 8, 9]
             # assert rightbatch.adjs[0].edge_index.tolist() == [[1, 0, 2, 4, 1, 3, 5, 2, 5],
             #                                                   [0, 1, 1, 1, 2, 2, 2, 3, 3]]
@@ -252,6 +251,5 @@ if __name__ == '__main__':
     x = torch.tensor([[1], [2], [3], [4], [5], [6], [7],
                      [8], [9], [10]], dtype=torch.float)
     data = Data(x=x, edge_index=edge_index)
-    assert data.validate() == True
-    one_hop(data)
-    # two_hop(data)
+    # one_hop(data)
+    two_hop(data)
