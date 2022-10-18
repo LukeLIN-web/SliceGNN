@@ -1,19 +1,15 @@
 #!/bin/bash
 
-dir=$1
+dir="sampler"
 
-
-
-
-multigpu(){
-    python3 $dir/multigpu.py --gpus $1 > logs/$1gpu.log
+multigpu() {
+    python3 $dir/multigpu.py --gpus $1 >logs/$1gpu.log
     pid=$!
     wait $pid
     echo "$@"
 }
 
-
-test(){
+test() {
     multigpu 4
     multigpu 2
     multigpu 1
@@ -22,16 +18,23 @@ test(){
     # epochtimetest 1
 }
 
+compare() {
+    python $dir/gpu1_microbatch.py >logs/gpu1_microbatch.log
+    pid=$!
+    wait $pid
+    echo "$@"
+    python  $dir/gpu1_minibatch.py >logs/gpu1_minibatch.log
+}
 
-
-epochtimetest(){
-    python3 $dir/epochtimetest.py --gpus $1 > logs/epochtimetest$1gpu.log
+epochtimetest() {
+    python3 $dir/epochtimetest.py --gpus $1 >logs/epochtimetest$1gpu.log
     pid=$!
     wait $pid
     echo "$@"
 }
 
-test 
+clear(){
+    rm logs/*gpu.log
+}
 
-
-
+compare

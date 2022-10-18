@@ -1,18 +1,20 @@
 import os
 from statistics import mean
-
+from timeit import default_timer
+import argparse
 import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
 import torch.nn.functional as F
 from torch.nn.parallel import DistributedDataParallel
-from tqdm import tqdm
 
 from torch_geometric.datasets import Reddit
 from torch_geometric.loader import NeighborSampler
 from torch_geometric.nn import SAGEConv
 
 from timeit import default_timer
+from get_micro_batch import *
+
 
 class SAGE(torch.nn.Module):
     def __init__(self, in_channels, hidden_channels, out_channels,
@@ -37,8 +39,6 @@ class SAGE(torch.nn.Module):
 
     @torch.no_grad()
     def inference(self, x_all, device, subgraph_loader):
-        pbar = tqdm(total=x_all.size(0) * self.num_layers)
-        pbar.set_description('Evaluating')
 
         for i in range(self.num_layers):
             xs = []
@@ -51,25 +51,21 @@ class SAGE(torch.nn.Module):
                     x = F.relu(x)
                 xs.append(x.cpu())
 
-                pbar.update(batch_size)
-
             x_all = torch.cat(xs, dim=0)
-
-        pbar.close()
 
         return x_all
 
 
-def run(dataset):
+def run(dataset, args):
     data = dataset[0]
     train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
 
     train_loader = NeighborSampler(data.edge_index, node_idx=train_idx,
                                    sizes=[25, 10], batch_size=1024,
-                                   shuffle=True, num_workers=0)
+                                   shuffle=True, num_workers=14, drop_last=True)
     subgraph_loader = NeighborSampler(data.edge_index, node_idx=None,
-                                          sizes=[-1], batch_size=2048,
-                                          shuffle=False, num_workers=6)
+                                      sizes=[-1], batch_size=2048,
+                                      shuffle=False, num_workers=6)
     # 第一层每个node 25个neibor, 第二层每个node 访问10个.
     torch.manual_seed(12345)
     rank = torch.device('cuda:0')
@@ -77,55 +73,58 @@ def run(dataset):
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
     x, y = data.x.to(rank), data.y.to(rank)
-
     for epoch in range(1, 4):
         model.train()
-        batchsizes = []
-        loadtimes = []
-        gputimes = []
+        loadtimes,  gputimes = [] , []
+        get_micro_batch_times = []
         start = default_timer()
         for batch_size, n_id, adjs in train_loader:
             # print( 'Target node num: {},  sampled node num: {}'.format(batch_size,n_id.shape)) # 基本上都是1024,最后几个是469,
             dataloadtime = default_timer()
-            adjs = [adj.to(rank) for adj in adjs] 
+            micro_batchs = get_micro_batch(adjs,
+                                           n_id,
+                                           batch_size, args.num_micro_batch)
+            get_micro_batch_time = default_timer()
+            subgraphout = []
+            for micro_batch in micro_batchs:
+                adjs = [adj.to(rank) for adj in micro_batch.adjs] # load topo
+                subgraphout.append(
+                    model(x[n_id][micro_batch.nid], adjs)) # forward 
+            out = torch.cat(subgraphout, 0)
             optimizer.zero_grad()
-            out = model(x[n_id], adjs)
             loss = F.nll_loss(out, y[n_id[:batch_size]])
             loss.backward()
             optimizer.step()
             stop = default_timer()
-            loadtime = dataloadtime - start
-            end2endtime = stop - start
-            gputime = end2endtime - loadtime
-            batchsizes.append(batch_size)
-            loadtimes.append(loadtime)
-            gputimes.append(gputime)
+            get_micro_batch_times.append( get_micro_batch_time - dataloadtime)
+            loadtimes.append(dataloadtime - start)
+            gputimes.append(stop - get_micro_batch_time)
             start = default_timer()
-        avgbatchsize = round(mean(batchsizes[5:-5]),3)
-        avggputime = round(mean(gputimes[5:-5]) ,3)
-        avgloadtime = round(mean(loadtimes[5:-5]),3)
-        print(f'batch size={avgbatchsize}, batchloadtime={avgloadtime}, '
-                f' gputime = {avggputime} ')
+        avg_get_micro_batch_times = round(mean(get_micro_batch_times[5:-5]), 3)
+        avggputime = round(mean(gputimes[5:-5]), 3)
+        avgloadtime = round(mean(loadtimes[5:-5]), 3)
+        print(f'avg_get_micro_batch_times={avg_get_micro_batch_times}, batchloadtime={avgloadtime}, '
+              f' gputime = {avggputime} ')
 
-        # print(f'Epoch: {epoch:03d}, Loss: {loss:.4f}')
+        print(f'Epoch: {epoch:03d}, Loss: {loss:.4f}')
 
-        # if epoch % 1 == 0:  # We evaluate on a single GPU for now
-        # # if False:
-        #     model.eval()
-        #     with torch.no_grad():
-        #         out = model.module.inference(x, rank, subgraph_loader)
-        #     res = out.argmax(dim=-1) == data.y
+        if epoch % 1 == 0:  # We evaluate on a single GPU for now
+            model.eval()
+            with torch.no_grad():
+                out = model.inference(x, rank, subgraph_loader)
+            res = out.argmax(dim=-1) == data.y
 
-        #     acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
-        #     acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
-        #     acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
-        #     print(f'Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}')
-
+            acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
+            acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
+            acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
+            print(f'Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}')
 
 
 if __name__ == '__main__':
-    datapath = "/root/share/pytorch_geometric/examples/data/Reddit"
+    datapath = "/root/share/data/Reddit"
     dataset = Reddit(datapath)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--num_micro_batch', type=int, default=4)
+    args = parser.parse_args()
 
-    run(dataset)
-    
+    run(dataset, args)
