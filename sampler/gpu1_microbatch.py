@@ -73,7 +73,7 @@ def run(dataset, args):
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
     x, y = data.x.to(rank), data.y.to(rank)
-    for epoch in range(1, 4):
+    for epoch in range(args.num_epochs):
         model.train()
         loadtimes,  gputimes = [] , []
         get_micro_batch_times = []
@@ -124,6 +124,7 @@ if __name__ == '__main__':
     datapath = "/root/share/data/Reddit"
     dataset = Reddit(datapath)
     parser = argparse.ArgumentParser()
+    parser.add_argument('--num_epochs', type=int, default=4)
     parser.add_argument('--num_micro_batch', type=int, default=4)
     args = parser.parse_args()
 

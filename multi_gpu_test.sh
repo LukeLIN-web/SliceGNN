@@ -19,11 +19,11 @@ test() {
 }
 
 compare() {
-    python $dir/gpu1_microbatch.py >logs/gpu1_microbatch.log
+    python $dir/gpu1_microbatch.py --num_epochs $1 >logs/gpu1_microbatch.log
     pid=$!
     wait $pid
     echo "$@"
-    python  $dir/gpu1_minibatch.py >logs/gpu1_minibatch.log
+    python $dir/gpu1_minibatch.py --num_epochs $1 >logs/gpu1_minibatch.log
 }
 
 epochtimetest() {
@@ -33,8 +33,8 @@ epochtimetest() {
     echo "$@"
 }
 
-clear(){
+clear() {
     rm logs/*gpu.log
 }
 
-compare
+compare 11

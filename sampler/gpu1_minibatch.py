@@ -1,3 +1,4 @@
+import argparse
 import os
 from statistics import mean
 
@@ -54,7 +55,7 @@ class SAGE(torch.nn.Module):
         return x_all
 
 
-def run(dataset):
+def run(dataset,args):
     data = dataset[0]
     train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
 
@@ -72,7 +73,7 @@ def run(dataset):
 
     x, y = data.x.to(rank), data.y.to(rank)
 
-    for epoch in range(1, 4):
+    for epoch in range(args.num_epochs):
         model.train()
         loadtimes,  gputimes = [] , []
         start = default_timer()
@@ -111,5 +112,9 @@ def run(dataset):
 if __name__ == '__main__':
     datapath = "/root/share/data/Reddit"
     dataset = Reddit(datapath)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--num_epochs', type=int, default=4)
+    parser.add_argument('--num_micro_batch', type=int, default=4)
+    args = parser.parse_args()
 
-    run(dataset)
+    run(dataset,args)
