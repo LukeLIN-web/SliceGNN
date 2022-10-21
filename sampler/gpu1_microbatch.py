@@ -85,16 +85,13 @@ def run(dataset, args):
                                            n_id,
                                            batch_size, args.num_micro_batch)
             get_micro_batch_time = default_timer()
-            subgraphout = []
-            for micro_batch in micro_batchs:
+            for i, micro_batch in enumerate(micro_batchs):
                 adjs = [adj.to(rank) for adj in micro_batch.adjs] # load topo
-                subgraphout.append(
-                    model(x[n_id][micro_batch.nid], adjs)) # forward 
-            out = torch.cat(subgraphout, 0)
-            optimizer.zero_grad()
-            loss = F.nll_loss(out, y[n_id[:batch_size]])
-            loss.backward()
-            optimizer.step()
+                out = model(x[n_id][micro_batch.nid], adjs) # forward 
+                optimizer.zero_grad()
+                loss = F.nll_loss(out, y[n_id[:batch_size]][i* micro_batch.batch_size: (i+1)*micro_batch.batch_size])
+                loss.backward()
+                optimizer.step()
             stop = default_timer()
             get_micro_batch_times.append( get_micro_batch_time - dataloadtime)
             loadtimes.append(dataloadtime - start)

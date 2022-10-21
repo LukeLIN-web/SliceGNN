@@ -37,4 +37,4 @@ clear() {
     rm logs/*gpu.log
 }
 
-compare 11
+compare 4

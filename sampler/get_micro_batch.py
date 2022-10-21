@@ -135,7 +135,7 @@ def get_micro_batch(
     n_id: Tensor,
     batch_size: int,
     num_micro_batch: int = 2,
-) -> List[namedtuple('micro_batch', ['bach_size', 'nid', 'adjs'])]:
+) -> List[namedtuple('micro_batch', ['batch_size', 'nid', 'adjs'])]:
     r"""Returns the micro batchs
 
     Args:
@@ -143,9 +143,9 @@ def get_micro_batch(
         hop: subgraph hop times
         num_micro_batch: micro_batch number
 
-    :rtype: List[namedtuple('micro_batch', ['bach_size', 'nid', 'adjs'])]
+    :rtype: List[namedtuple('micro_batch', ['batch_size', 'nid', 'adjs'])]
     """
-    micro_batch = namedtuple('micro_batch', ['bach_size', 'nid', 'adjs'])
+    micro_batch = namedtuple('micro_batch', ['batch_size', 'nid', 'adjs'])
     n_id = torch.arange(len(n_id))  # relabel for mini batch
     if batch_size < num_micro_batch:
         return [micro_batch(batch_size, n_id, adjs)]
