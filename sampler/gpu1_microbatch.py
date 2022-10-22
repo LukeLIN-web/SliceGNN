@@ -75,25 +75,26 @@ def run(dataset, args):
     x, y = data.x.to(rank), data.y.to(rank)
     for epoch in range(args.num_epochs):
         model.train()
-        loadtimes,  gputimes = [] , []
+        loadtimes,  gputimes = [], []
         get_micro_batch_times = []
         start = default_timer()
         for batch_size, n_id, adjs in train_loader:
-            # print( 'Target node num: {},  sampled node num: {}'.format(batch_size,n_id.shape)) # 基本上都是1024,最后几个是469,
+            # print( 'Target node num: {},  sampled node num: {}'.format(batch_size,n_id.shape)) # 基本上都是1024,最后几个是469
             dataloadtime = default_timer()
             micro_batchs = get_micro_batch(adjs,
                                            n_id,
                                            batch_size, args.num_micro_batch)
             get_micro_batch_time = default_timer()
+            optimizer.zero_grad()
             for i, micro_batch in enumerate(micro_batchs):
-                adjs = [adj.to(rank) for adj in micro_batch.adjs] # load topo
-                out = model(x[n_id][micro_batch.nid], adjs) # forward 
-                optimizer.zero_grad()
-                loss = F.nll_loss(out, y[n_id[:batch_size]][i* micro_batch.batch_size: (i+1)*micro_batch.batch_size])
+                adjs = [adj.to(rank) for adj in micro_batch.adjs]  # load topo
+                out = model(x[n_id][micro_batch.nid], adjs)  # forward
+                loss = F.nll_loss(
+                    out, y[n_id[:batch_size]][i * micro_batch.batch_size: (i+1)*micro_batch.batch_size])
                 loss.backward()
-                optimizer.step()
+            optimizer.step()
             stop = default_timer()
-            get_micro_batch_times.append( get_micro_batch_time - dataloadtime)
+            get_micro_batch_times.append(get_micro_batch_time - dataloadtime)
             loadtimes.append(dataloadtime - start)
             gputimes.append(stop - get_micro_batch_time)
             start = default_timer()
@@ -103,7 +104,7 @@ def run(dataset, args):
         print(f'avg_get_micro_batch_times={avg_get_micro_batch_times}, batchloadtime={avgloadtime}, '
               f' gputime = {avggputime} ')
 
-        print(f'Epoch: {epoch:03d}, Loss: {loss:.4f}')
+        # print(f'Epoch: {epoch:03d}, Loss: {loss:.4f}')
 
         if epoch % 1 == 0:  # We evaluate on a single GPU for now
             model.eval()
