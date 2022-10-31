@@ -66,20 +66,22 @@ def run(dataset, args):
     subgraph_loader = NeighborSampler(data.edge_index, node_idx=None,
                                       sizes=[-1], batch_size=2048,
                                       shuffle=False, num_workers=6)
-    # 第一层每个node 25个neibor, 第二层每个node 访问10个.
+
     torch.manual_seed(12345)
-    rank = torch.device('cuda:0')
-    model = SAGE(dataset.num_features, 256, dataset.num_classes).to(rank)
+    # rank = torch.device('cuda:0')
+    rank = torch.device('cpu') 
+    model = SAGE(dataset.num_features, 256, dataset.num_classes)
+    # model = SAGE(dataset.num_features, 256, dataset.num_classes).to(rank)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
-    x, y = data.x.to(rank), data.y.to(rank)
+    # x, y = data.x.to(rank), data.y.to(rank)
+    x,y = data.x, data.y # cpu version
     for epoch in range(args.num_epochs):
         model.train()
         loadtimes,  gputimes = [], []
         get_micro_batch_times = []
         start = default_timer()
         for batch_size, n_id, adjs in train_loader:
-            # print( 'Target node num: {},  sampled node num: {}'.format(batch_size,n_id.shape)) # 基本上都是1024,最后几个是469
             dataloadtime = default_timer()
             micro_batchs = get_micro_batch(adjs,
                                            n_id,
@@ -87,6 +89,10 @@ def run(dataset, args):
             get_micro_batch_time = default_timer()
             optimizer.zero_grad()
             for i, micro_batch in enumerate(micro_batchs):
+                print(micro_batch.nid.shape)
+                for adj in micro_batch.adjs:
+
+                exit(0)
                 adjs = [adj.to(rank) for adj in micro_batch.adjs]  # load topo
                 out = model(x[n_id][micro_batch.nid], adjs)  # forward
                 loss = F.nll_loss(
