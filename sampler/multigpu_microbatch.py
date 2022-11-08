@@ -111,7 +111,7 @@ def run(rank, world_size, dataset, args):
                 for i in range(1,args.num_micro_batch):
                     dist.send(micro_batchs[i].nid,dst=i,tag=0)
             else:
-                # 发送和接收
+                # 发送和接收 
                 dist.recv(micro_batch.nid,src=0,tag=0)
             optimizer.zero_grad()
             # for i, micro_batch in enumerate(micro_batchs):

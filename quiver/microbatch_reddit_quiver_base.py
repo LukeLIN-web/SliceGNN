@@ -101,7 +101,6 @@ def run(rank, world_size, data_split, edge_index, x, quiver_sampler: quiver.pyg.
             micro_batchs = get_micro_batch(adjs,
                                            n_id,
                                            batch_size, 4)
-            # adjs = [adj.to(rank) for adj in adjs]
 
             optimizer.zero_grad()
             for i, micro_batch in enumerate(micro_batchs):
@@ -111,11 +110,6 @@ def run(rank, world_size, data_split, edge_index, x, quiver_sampler: quiver.pyg.
                     out, y[n_id[:batch_size]][i * micro_batch.batch_size: (i+1)*micro_batch.batch_size])
                 loss.backward()
             optimizer.step()
-
-            # out = model(x[n_id].to(rank), adjs)
-            # loss = F.nll_loss(out, y[n_id[:batch_size]])
-            # loss.backward()
-            # optimizer.step()
 
         dist.barrier()
 
