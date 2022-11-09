@@ -65,7 +65,7 @@ class SAGE(torch.nn.Module):
         return x_all
 
 
-def run(rank, world_size, data_split, edge_index, x, quiver_sampler: quiver.pyg.GraphSageSampler, y, num_features, num_classes):
+def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, dataset):
 
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '12355'
@@ -73,25 +73,24 @@ def run(rank, world_size, data_split, edge_index, x, quiver_sampler: quiver.pyg.
 
     torch.cuda.set_device(rank)
 
-    train_mask, val_mask, test_mask = data_split
-    train_idx = train_mask.nonzero(as_tuple=False).view(-1)
+    train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
     train_idx = train_idx.split(train_idx.size(0) // world_size)[rank]
 
     train_loader = torch.utils.data.DataLoader(
         train_idx, batch_size=1024, shuffle=True, drop_last=True)
 
     if rank == 0:
-        subgraph_loader = NeighborSampler(edge_index, node_idx=None,
+        subgraph_loader = NeighborSampler(data.edge_index, node_idx=None,
                                           sizes=[-1], batch_size=2048,
                                           shuffle=False, num_workers=6)
 
     torch.manual_seed(12345)
-    model = SAGE(num_features, 256, num_classes).to(rank)
+    model = SAGE(dataset.num_features, 256, dataset.num_classes).to(rank)
     model = DistributedDataParallel(model, device_ids=[rank])
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
     # Simulate cases those data can not be fully stored by GPU memory
-    y = y.to(rank)
+    y = data.y.to(rank)
 
     for epoch in range(1, 6):
         model.train()
@@ -122,9 +121,9 @@ def run(rank, world_size, data_split, edge_index, x, quiver_sampler: quiver.pyg.
             with torch.no_grad():
                 out = model.module.inference(x, rank, subgraph_loader)
             res = out.argmax(dim=-1) == y
-            acc1 = int(res[train_mask].sum()) / int(train_mask.sum())
-            acc2 = int(res[val_mask].sum()) / int(val_mask.sum())
-            acc3 = int(res[test_mask].sum()) / int(test_mask.sum())
+            acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
+            acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
+            acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
             print(f'Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}')
 
         dist.barrier()
@@ -151,11 +150,10 @@ if __name__ == '__main__':
     quiver_feature.from_cpu_tensor(data.x)
 
     print('Let\'s use', world_size, 'GPUs!')
-    data_split = (data.train_mask, data.val_mask, data.test_mask)
     mp.spawn(
         run,
-        args=(world_size, data_split, data.edge_index, quiver_feature,
-              quiver_sampler, data.y, dataset.num_features, dataset.num_classes),
+        args=(world_size, data, quiver_feature,
+              quiver_sampler, dataset),
         nprocs=world_size,
         join=True
     )

@@ -32,16 +32,14 @@ class SAGE(torch.nn.Module):
                 x = F.relu(x)
         return x
 
-
-class EdgeIndex(NamedTuple):
-    edge_index: Tensor
-    e_id: Optional[Tensor]
+class Adj(NamedTuple):
+    edge_index: torch.Tensor
+    e_id: torch.Tensor
     size: Tuple[int, int]
 
     def to(self, *args, **kwargs):
-        edge_index = self.edge_index.to(*args, **kwargs)
-        e_id = self.e_id.to(*args, **kwargs) if self.e_id is not None else None
-        return EdgeIndex(edge_index, e_id, self.size)
+        return Adj(self.edge_index.to(*args, **kwargs),
+                   self.e_id.to(*args, **kwargs), self.size)
 
 
 def slice_adj(
@@ -109,15 +107,8 @@ def slice_adj(
     subset = torch.cat(subsets[1:]).unique()
     subset = torch.cat((subsets[0], subset), 0)
 
-    # subset, inv = torch.cat(subsets).unique(return_inverse=True)
-    # inv = inv[:node_idx.numel()]
-
     node_mask.fill_(False)
     node_mask[subset] = True  # the subgraph nodes after hop
-
-    # edge_mask = node_mask[target] & node_mask[source]
-    # print(edge_index[:, node_mask[target]])
-    # print(edge_index[:, node_mask[source]])
 
     edge_index = edge_index[:, edge_mask]
 
@@ -131,11 +122,11 @@ def slice_adj(
 
 
 def get_micro_batch(
-    adjs: List[EdgeIndex],
+    adjs,
     n_id: Tensor,
     batch_size: int,
     num_micro_batch: int = 2,
-) -> List[namedtuple('micro_batch', ['batch_size', 'nid', 'adjs'])]:
+):
     r"""Returns the micro batchs
 
     Args:
@@ -143,12 +134,11 @@ def get_micro_batch(
         hop: subgraph hop times
         num_micro_batch: micro_batch number
 
-    :rtype: List[namedtuple('micro_batch', ['batch_size', 'nid', 'adjs'])]
+    :rtype: List[List]
     """
-    micro_batch = namedtuple('micro_batch', ['batch_size', 'nid', 'adjs'])
     n_id = torch.arange(len(n_id))  # relabel for mini batch
     if batch_size < num_micro_batch:
-        return [micro_batch(batch_size, n_id, adjs)]
+        return [batch_size, n_id, adjs]
     assert batch_size % num_micro_batch == 0
     adjs.reverse() 
     micro_batch_size = batch_size // num_micro_batch     # TODO: or padding last batch
@@ -160,10 +150,10 @@ def get_micro_batch(
             target_size = len(sub_nid)
             sub_nid, sub_adjs,  edge_mask = slice_adj(
                 sub_nid, adj.edge_index, relabel_nodes=True)
-            subadjs.append(EdgeIndex(sub_adjs, None, (
+            subadjs.append(Adj(sub_adjs, None, (
                 len(sub_nid), target_size)))
         subadjs.reverse()  # O(n)
-        micro_batchs.append(micro_batch(micro_batch_size, sub_nid, subadjs))
+        micro_batchs.append( [sub_nid,micro_batch_size, subadjs])
     return micro_batchs
 
 def onehop(data):

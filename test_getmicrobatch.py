@@ -2,7 +2,7 @@ from torch import Tensor
 from typing import List
 from torch_geometric.loader import NeighborSampler
 import torch
-from sampler.get_micro_batch import *
+from gnnproject.utils.get_micro_batch import *
 
 
 def test_get_micro_batch():

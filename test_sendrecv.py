@@ -1,30 +1,73 @@
-from torch import Tensor
-from typing import List
-from torch_geometric.loader import NeighborSampler
+import os
 import torch
-from sampler.get_micro_batch import *
+import torch.nn.functional as F
+import torch.multiprocessing as mp
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel
+
+from torch_geometric.nn import SAGEConv
+from torch_geometric.datasets import Reddit
+from torch_geometric.loader import NeighborSampler
+
+import quiver
+from timeit import default_timer
+from utils.get_micro_batch import *
+
+os.environ['MASTER_ADDR'] = 'localhost'
+os.environ['MASTER_PORT'] = '12355'
 
 
-def test_get_micro_batch():
-    # three hop
-    edge_index = torch.tensor([[0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9],
-                               [1, 6, 0, 2, 6, 1, 3, 7, 2, 4, 8, 3, 5, 9, 4, 9, 0, 1, 7, 2, 6, 8, 3, 7, 9, 4, 5, 8]], dtype=torch.long)
-    x = Tensor([[1,2], [2,3], [3,3], [4,3], [5,3], [6,3], [7,3], [8,3], [9,3], [10,3]])
-    hop = [-1, -1, -1]
-    train_loader = NeighborSampler(edge_index,
-                                   sizes=hop, batch_size=4,
-                                   shuffle=False, num_workers=0)
-    num_features, hidden_size, num_classes = 2, 16, 1
-    model = SAGE(num_features, hidden_size, num_classes, num_layers=3)
-    for batch_size, n_id, adjs in train_loader:
-        out = model(x[n_id], adjs)
-        num_micro_batch = 4
-        micro_batchs = get_micro_batch(adjs,
-                                       n_id,
-                                       batch_size, num_micro_batch)
-        subgraphout = []
-        for micro_batch in micro_batchs:
-            subgraphout.append(
-                model(x[n_id][micro_batch.nid], micro_batch.adjs))
-        subgraphout = torch.cat(subgraphout, 0)
-        assert torch.abs((out - subgraphout).mean()) < 0.01
+def broadcast_obj(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, dataset):
+    dist.init_process_group('nccl', rank=rank, world_size=world_size)
+
+    torch.cuda.set_device(rank)
+
+    train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
+    train_idx = train_idx.split(train_idx.size(0) // world_size)[rank]
+
+    train_loader = torch.utils.data.DataLoader(
+        train_idx, batch_size=1024, shuffle=True, drop_last=True)
+
+    if rank == 0:
+        subgraph_loader = NeighborSampler(data.edge_index, node_idx=None,
+                                          sizes=[-1], batch_size=2048,
+                                          shuffle=False, num_workers=6)
+
+    torch.manual_seed(12345)
+    model = SAGE(dataset.num_features, 256, dataset.num_classes).to(rank)
+    model = DistributedDataParallel(model, device_ids=[rank])
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+
+    for epoch in range(1, 6):
+        model.train()
+        epoch_start = default_timer()
+        for seeds in train_loader:
+            if rank == 0:
+                n_id, batch_size, adjs = quiver_sampler.sample(seeds)
+                micro_batchs = get_micro_batch(adjs,
+                                               n_id,
+                                               batch_size, 4)
+                objects = micro_batchs
+            else:
+                objects = [None, None, None, None]
+            dist.broadcast_object_list(
+                objects, src=0, device=torch.device(rank))
+
+
+def test_broadcast_obj():
+    dataset = Reddit('/data/Reddit')
+    world_size = torch.cuda.device_count()
+    data = dataset[0]
+    csr_topo = quiver.CSRTopo(data.edge_index)
+
+    quiver_sampler = quiver.pyg.GraphSageSampler(
+        csr_topo, sizes=[25, 10], device=0, mode='GPU')  # 这里是0, 但是spawn之后会变成fake,然后再lazy init 赋值
+
+    print('Let\'s use', world_size, 'GPUs!')
+    mp.spawn(
+        broadcast_obj,
+        args=(world_size, data, None,
+              quiver_sampler, dataset),
+        nprocs=world_size,
+        join=True
+    )
