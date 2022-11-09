@@ -32,14 +32,16 @@ class SAGE(torch.nn.Module):
                 x = F.relu(x)
         return x
 
+
 class Adj(NamedTuple):
     edge_index: torch.Tensor
     e_id: torch.Tensor
     size: Tuple[int, int]
 
     def to(self, *args, **kwargs):
+        e_id = self.e_id.to(*args, **kwargs) if self.e_id is not None else None
         return Adj(self.edge_index.to(*args, **kwargs),
-                   self.e_id.to(*args, **kwargs), self.size)
+                   e_id, self.size)
 
 
 def slice_adj(
@@ -126,7 +128,7 @@ def get_micro_batch(
     n_id: Tensor,
     batch_size: int,
     num_micro_batch: int = 2,
-):
+) -> List:
     r"""Returns the micro batchs
 
     Args:
@@ -140,7 +142,7 @@ def get_micro_batch(
     if batch_size < num_micro_batch:
         return [batch_size, n_id, adjs]
     assert batch_size % num_micro_batch == 0
-    adjs.reverse() 
+    adjs.reverse()
     micro_batch_size = batch_size // num_micro_batch     # TODO: or padding last batch
     micro_batchs = []
     for i in range(num_micro_batch):
@@ -153,8 +155,9 @@ def get_micro_batch(
             subadjs.append(Adj(sub_adjs, None, (
                 len(sub_nid), target_size)))
         subadjs.reverse()  # O(n)
-        micro_batchs.append( [sub_nid,micro_batch_size, subadjs])
+        micro_batchs.append([sub_nid, micro_batch_size, subadjs])
     return micro_batchs
+
 
 def onehop(data):
     num_features, hidden_size, num_classes = 1, 16, 1
@@ -177,6 +180,7 @@ def onehop(data):
                 model(x[n_id][micro_batch.nid], micro_batch.adjs))
         subgraphout = torch.cat(subgraphout, 0)
         assert torch.abs((out - subgraphout).mean()) < 0.01
+
 
 # 0,0,1,1,1,2,2,2,3,3,3,4,4,4,5,5,6,6,6,7,7,7,8,8,8,9,9,9
 # 1,6,0,2,6,1,3,7,2,4,8,3,5,9,4,9,0,1,7,2,6,8,3,7,9,4,5,8

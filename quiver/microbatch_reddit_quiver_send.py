@@ -12,14 +12,11 @@ from torch_geometric.nn import SAGEConv
 from torch_geometric.datasets import Reddit
 from torch_geometric.loader import NeighborSampler
 
-######################
-# Import From Quiver
-######################
 import quiver
 from timeit import default_timer
 from gnnproject.utils.get_micro_batch import *
 import argparse
-import dill
+
 
 class SAGE(torch.nn.Module):
     def __init__(self, in_channels, hidden_channels, out_channels,
@@ -92,7 +89,7 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
     # Simulate cases those data can not be fully stored by GPU memory
-    # y = data.y.to(rank)
+    y = data.y.to(rank)
 
     for epoch in range(1, 6):
         model.train()
@@ -101,20 +98,18 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, 
             if rank == 0:
                 n_id, batch_size, adjs = quiver_sampler.sample(seeds)
                 micro_batchs = get_micro_batch(adjs,
-                                           n_id,
-                                           batch_size, 4)
-                dill.pickles(micro_batchs[0])
-                objects = micro_batchs
+                                               n_id,
+                                               batch_size, 4)
             else:
-                objects = [None, None, None,None]
-            dist.broadcast_object_list(objects, src=0,device=torch.device(rank))
-        #     adjs = [adj.to(rank) for adj in adjs]
-
-        #     optimizer.zero_grad()
-        #     out = model(x[n_id].to(rank), adjs)
-        #     loss = F.nll_loss(out, y[n_id[:batch_size]])
-        #     loss.backward()
-        #     optimizer.step()
+                micro_batchs = [None, None, None, None]
+            dist.broadcast_object_list(
+                micro_batchs, src=0, device=torch.device(rank))
+            adjs = [adj.to(rank) for adj in micro_batch.adjs]  # load topo
+            out = model(x[n_id][micro_batch.nid], adjs)  # forward
+            loss = F.nll_loss(
+                    out, y[n_id[:batch_size]][i * micro_batch.batch_size: (i+1)*micro_batch.batch_size])
+            loss.backward()
+            optimizer.step()
 
         # dist.barrier()
 

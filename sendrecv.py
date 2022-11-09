@@ -28,15 +28,9 @@ def broadcast_obj(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSag
     train_loader = torch.utils.data.DataLoader(
         train_idx, batch_size=1024, shuffle=True, drop_last=True)
 
-    if rank == 0:
-        subgraph_loader = NeighborSampler(data.edge_index, node_idx=None,
-                                          sizes=[-1], batch_size=2048,
-                                          shuffle=False, num_workers=6)
-
     torch.manual_seed(12345)
     model = SAGE(dataset.num_features, 256, dataset.num_classes).to(rank)
     model = DistributedDataParallel(model, device_ids=[rank])
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
     for epoch in range(1, 6):
         model.train()
@@ -52,6 +46,8 @@ def broadcast_obj(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSag
                 objects = [None, None, None, None]
             dist.broadcast_object_list(
                 objects, src=0, device=torch.device(rank))
+            print(objects)
+            
 
 
 def test_broadcast_obj():
@@ -71,3 +67,7 @@ def test_broadcast_obj():
         nprocs=world_size,
         join=True
     )
+
+
+if __name__ == '__main__':
+    test_broadcast_obj()
