@@ -106,7 +106,7 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, 
                 adjs = [adj.to(rank) for adj in micro_batch[2]]  # load topo
                 out = model(x[n_id][micro_batch[0]], adjs)  # forward
                 loss = F.nll_loss(
-                    out, y[n_id[:batch_size]][i * micro_batch[1]: (i+1)*micro_batch[1]])
+                    out, y[n_id[:batch_size]]   [i * micro_batch[1]: (i+1)*micro_batch[1]])
                 loss.backward()
             optimizer.step()
 
@@ -145,15 +145,14 @@ if __name__ == '__main__':
     quiver_sampler = quiver.pyg.GraphSageSampler(
         csr_topo, sizes=[25, 10], device=0, mode='GPU')  # 这里是0, 但是spawn之后会变成fake,然后再lazy init 赋值
     # cache feature 到rank0
-    # quiver_feature = quiver.Feature(rank=0, device_list=list(range(
-    #     world_size)), device_cache_size="2G", cache_policy="device_replicate", csr_topo=csr_topo)
-    # quiver_feature.from_cpu_tensor(data.x)
-    # quiver_feature = None
+    quiver_feature = quiver.Feature(rank=0, device_list=list(range(
+        world_size)), device_cache_size="2G", cache_policy="device_replicate", csr_topo=csr_topo)
+    quiver_feature.from_cpu_tensor(data.x)
 
     print('Let\'s use', world_size, 'GPUs!')
     mp.spawn(
         run,
-        args=(world_size, data, data.x,
+        args=(world_size, data, quiver_feature,
               quiver_sampler, dataset),
         nprocs=world_size,
         join=True
