@@ -89,7 +89,6 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, 
     model = DistributedDataParallel(model, device_ids=[rank])
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
-    # Simulate cases those data can not be fully stored by GPU memory
     y = data.y.to(rank)
 
     for epoch in range(1, 6):
@@ -99,14 +98,13 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, 
             n_id, batch_size, adjs = quiver_sampler.sample(seeds)
             micro_batchs = get_micro_batch(adjs,
                                            n_id,
-                                           batch_size, 4)
-
+                                           batch_size, 2)
             optimizer.zero_grad()
             for i, micro_batch in enumerate(micro_batchs):
                 adjs = [adj.to(rank) for adj in micro_batch[2]]  # load topo
                 out = model(x[n_id][micro_batch[0]], adjs)  # forward
                 loss = F.nll_loss(
-                    out, y[n_id[:batch_size]]   [i * micro_batch[1]: (i+1)*micro_batch[1]])
+                    out, y[n_id[:batch_size]][i * micro_batch[1]: (i+1)*micro_batch[1]])
                 loss.backward()
             optimizer.step()
 
@@ -133,15 +131,12 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, 
 
 if __name__ == '__main__':
     dataset = Reddit('/data/Reddit')
-    world_size = torch.cuda.device_count()
+    world_size = 2  # torch.cuda.device_count()
 
     data = dataset[0]
 
     csr_topo = quiver.CSRTopo(data.edge_index)
 
-    ##############################
-    # Create Sampler And Feature
-    ##############################
     quiver_sampler = quiver.pyg.GraphSageSampler(
         csr_topo, sizes=[25, 10], device=0, mode='GPU')  # 这里是0, 但是spawn之后会变成fake,然后再lazy init 赋值
     # cache feature 到rank0

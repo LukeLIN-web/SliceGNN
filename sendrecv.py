@@ -33,20 +33,23 @@ def broadcast_obj(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSag
     model = DistributedDataParallel(model, device_ids=[rank])
 
     for epoch in range(1, 6):
-        model.train()
-        epoch_start = default_timer()
+        # model.train()
+        # epoch_start = default_timer()
         for seeds in train_loader:
-            if rank == 0:
-                n_id, batch_size, adjs = quiver_sampler.sample(seeds)
-                micro_batchs = get_micro_batch(adjs,
-                                               n_id,
-                                               batch_size, 4)
-                objects = micro_batchs
+            # Note: Process group initialization omitted on each rank.
+            tensor_size = 2
+            t_ones = torch.ones(tensor_size)
+            t_fives = torch.ones(tensor_size) * 5
+            output_tensor = torch.zeros(tensor_size)
+            if dist.get_rank() == 0:
+                # Assumes world_size of 2.
+                # Only tensors, all of which must be the same size.
+                scatter_list = [t_ones, t_fives]
             else:
-                objects = [None, None, None, None]
-            dist.broadcast_object_list(
-                objects, src=0, device=torch.device(rank))
-            print(objects)
+                scatter_list = None
+            dist.scatter(output_tensor, scatter_list, src=0)
+            # Rank i gets scatter_list[i]. For example, on rank 1:
+            print(output_tensor)
             
 
 
