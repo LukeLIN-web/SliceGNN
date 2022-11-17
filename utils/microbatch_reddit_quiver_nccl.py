@@ -99,16 +99,21 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, 
                 micro_batchs = get_micro_batch(adjs,
                                                n_id,
                                                batch_size, 2)
+                nodeid = [n_id,batch_size]
             else:
                 micro_batchs = [None, None]
+                nodeid = [None,None]
+            dist.broadcast_object_list(nodeid, src=0, device=torch.device(rank) )
             dist.broadcast_object_list(
                 micro_batchs, src=0, device=torch.device(rank))
             micro_batch_n_id, micro_batch_batch_size, micro_batch_adjs = micro_batchs[rank]
-            adjs = [adj.to(rank) for adj in micro_batch_adjs]  # load topo
+            micro_batch_adjs = [adj.to(rank) for adj in micro_batch_adjs]  # load topo
             # 也要传输mini batch的 node id ,否则不对应
-            out = model(x[micro_batch_n_id], micro_batch_adjs)  # forward
+            mini_batch_n_id = nodeid[0]
+            mini_batch_batchsize = nodeid[1]
+            out = model(x[mini_batch_n_id][micro_batch_n_id], micro_batch_adjs)  # forward 
             loss = F.nll_loss(
-                out, y[micro_batch_n_id[:micro_batch_batch_size]])
+                out, y[mini_batch_n_id[:mini_batch_batchsize]][micro_batch_n_id[:micro_batch_batch_size]])
             loss.backward()
             optimizer.step()
 

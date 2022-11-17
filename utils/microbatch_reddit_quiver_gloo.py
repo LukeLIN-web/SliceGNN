@@ -1,4 +1,5 @@
 import os
+from statistics import mean
 
 import torch
 from tqdm import tqdm
@@ -11,11 +12,8 @@ from torch_geometric.nn import SAGEConv
 from torch_geometric.datasets import Reddit
 from torch_geometric.loader import NeighborSampler
 
-import time
-######################
-# Import From Quiver
-######################
 import quiver
+from timeit import default_timer
 from get_micro_batch import *
 
 
@@ -69,15 +67,15 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, 
 
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '12355'
-    dist.init_process_group('nccl', rank=rank, world_size=world_size)
+    dist.init_process_group('gloo', rank=rank, world_size=world_size)
 
     torch.cuda.set_device(rank)
 
     train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
-    train_idx = train_idx.split(train_idx.size(0) // world_size)[rank]
+    # train_idx = train_idx.split(train_idx.size(0) // world_size)[rank]
 
     train_loader = torch.utils.data.DataLoader(
-        train_idx, batch_size=1024, shuffle=True, drop_last=True)
+        train_idx, batch_size=1024, shuffle=False, drop_last=True)
 
     if rank == 0:
         subgraph_loader = NeighborSampler(data.edge_index, node_idx=None,
@@ -93,27 +91,36 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, 
 
     for epoch in range(1, 6):
         model.train()
-        epoch_start = time.time()
+        epoch_start = default_timer()
         for seeds in train_loader:
-            n_id, batch_size, adjs = quiver_sampler.sample(seeds)
-            micro_batchs = get_micro_batch(adjs,
-                                           n_id,
-                                           batch_size, 2)
-            optimizer.zero_grad()
-            for i, micro_batch in enumerate(micro_batchs):
-                adjs = [adj.to(rank) for adj in micro_batch[2]]  # load topo
-                out = model(x[n_id][micro_batch[0]], adjs)  # forward
-                target_node = n_id[:batch_size][i * micro_batch[1]: (i+1)*micro_batch[1]]
-                loss = F.nll_loss(
-                    out, y[target_node])
-                loss.backward()
+            if rank == 0:
+                n_id, batch_size, adjs = quiver_sampler.sample(seeds)
+                micro_batchs = get_micro_batch(adjs,
+                                               n_id,
+                                               batch_size, 2)
+                nodeid = [n_id,batch_size]
+            else:
+                micro_batchs = [None, None]
+                nodeid = [None,None]
+            dist.scatter_object_list((nodeid, src=0, device=torch.device(rank) )
+            dist.broadcast_object_list(
+                micro_batchs, src=0, device=torch.device(rank))
+            micro_batch_n_id, micro_batch_batch_size, micro_batch_adjs = micro_batchs[rank]
+            micro_batch_adjs = [adj.to(rank) for adj in micro_batch_adjs]  # load topo
+            # 也要传输mini batch的 node id ,否则不对应
+            mini_batch_n_id = nodeid[0]
+            mini_batch_batchsize = nodeid[1]
+            out = model(x[mini_batch_n_id][micro_batch_n_id], micro_batch_adjs)  # forward 
+            loss = F.nll_loss(
+                out, y[mini_batch_n_id[:mini_batch_batchsize]][micro_batch_n_id[:micro_batch_batch_size]])
+            loss.backward()
             optimizer.step()
 
         dist.barrier()
 
         if rank == 0:
             print(
-                f'Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {time.time() - epoch_start}')
+                f'Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {default_timer() - epoch_start}')
 
         if rank == 0 and epoch % 5 == 0:  # We evaluate on a single GPU for now
             model.eval()
@@ -135,7 +142,6 @@ if __name__ == '__main__':
     world_size = 2  # torch.cuda.device_count()
 
     data = dataset[0]
-
     csr_topo = quiver.CSRTopo(data.edge_index)
 
     quiver_sampler = quiver.pyg.GraphSageSampler(
@@ -144,6 +150,7 @@ if __name__ == '__main__':
     quiver_feature = quiver.Feature(rank=0, device_list=list(range(
         world_size)), device_cache_size="2G", cache_policy="device_replicate", csr_topo=csr_topo)
     quiver_feature.from_cpu_tensor(data.x)
+    # quiver_feature = None
 
     print('Let\'s use', world_size, 'GPUs!')
     mp.spawn(
