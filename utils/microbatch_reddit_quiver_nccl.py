@@ -90,7 +90,7 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, 
     # Simulate cases those data can not be fully stored by GPU memory
     y = data.y.to(rank)
 
-    for epoch in range(1, 6):
+    for epoch in range(1, 16):
         model.train()
         epoch_start = default_timer()
         for seeds in train_loader:
@@ -106,15 +106,16 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, 
             dist.broadcast_object_list(nodeid, src=0, device=torch.device(rank) )
             dist.broadcast_object_list(
                 micro_batchs, src=0, device=torch.device(rank))
-            micro_batch_n_id, micro_batch_batch_size, micro_batch_adjs = micro_batchs[rank]
+            micro_batch_n_id, micro_batch_size, micro_batch_adjs = micro_batchs[rank]
             micro_batch_adjs = [adj.to(rank) for adj in micro_batch_adjs]  # load topo
-            # 也要传输mini batch的 node id ,否则不对应
-            mini_batch_n_id = nodeid[0]
+            n_id = nodeid[0]
             mini_batch_batchsize = nodeid[1]
-            out = model(x[mini_batch_n_id][micro_batch_n_id], micro_batch_adjs)  # forward 
+            out = model(x[n_id][micro_batch_n_id], micro_batch_adjs)  # forward 
+            target_node = n_id[:mini_batch_batchsize][rank * micro_batch_size: (rank+1)*micro_batch_size]
             loss = F.nll_loss(
-                out, y[mini_batch_n_id[:mini_batch_batchsize]][micro_batch_n_id[:micro_batch_batch_size]])
+                out, y[target_node])
             loss.backward()
+            dist.barrier()
             optimizer.step()
 
         dist.barrier()
