@@ -1,5 +1,4 @@
 import os
-from statistics import mean
 
 import torch
 from tqdm import tqdm
@@ -72,7 +71,6 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, 
     torch.cuda.set_device(rank)
 
     train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
-    # train_idx = train_idx.split(train_idx.size(0) // world_size)[rank]
 
     train_loader = torch.utils.data.DataLoader(
         train_idx, batch_size=1024, shuffle=False, drop_last=True)
@@ -98,20 +96,23 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, 
                 n_id, batch_size, adjs = quiver_sampler.sample(seeds)
                 micro_batchs = get_micro_batch(adjs,
                                                n_id,
-                                               batch_size, 2)
-                nodeid = [n_id,batch_size]
+                                               batch_size, world_size)
+                nodeid = [n_id, batch_size]
             else:
                 micro_batchs = []
-                nodeid = [None,None]
-            output_list = [None]
-            dist.broadcast_object_list(nodeid, src=0, device=torch.device(rank) )
-            dist.scatter_object_list(output_list, micro_batchs, src=0)
-            micro_batch_n_id, micro_batch_size, micro_batch_adjs = output_list[0]
-            micro_batch_adjs = [adj.to(rank) for adj in micro_batch_adjs]  # load topo
-            n_id = nodeid[0]
-            mini_batch_batchsize = nodeid[1]
-            out = model(x[n_id][micro_batch_n_id], micro_batch_adjs)  # forward 
-            target_node = n_id[:mini_batch_batchsize][rank * micro_batch_size: (rank+1)*micro_batch_size]
+                nodeid = [None, None]
+            micro_batch = [None]
+            dist.broadcast_object_list(
+                nodeid, src=0, device=torch.device(rank))
+            dist.scatter_object_list(micro_batch, micro_batchs, src=0)
+            micro_batch_n_id, micro_batch_size, micro_batch_adjs = micro_batch[0]
+            micro_batch_adjs = [adj.to(rank)
+                                for adj in micro_batch_adjs]  # load topo
+            n_id, mini_batch_batchsize = nodeid[0], nodeid[1]
+
+            out = model(x[n_id][micro_batch_n_id], micro_batch_adjs)  # forward
+            target_node = n_id[:mini_batch_batchsize][rank *
+                                                      micro_batch_size: (rank+1)*micro_batch_size]
             loss = F.nll_loss(
                 out, y[target_node])
             loss.backward()
@@ -140,7 +141,7 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, 
 
 if __name__ == '__main__':
     dataset = Reddit('/data/Reddit')
-    world_size = 2  # torch.cuda.device_count()
+    world_size = 3  # torch.cuda.device_count()
 
     data = dataset[0]
     csr_topo = quiver.CSRTopo(data.edge_index)
@@ -151,7 +152,6 @@ if __name__ == '__main__':
     quiver_feature = quiver.Feature(rank=0, device_list=list(range(
         world_size)), device_cache_size="2G", cache_policy="device_replicate", csr_topo=csr_topo)
     quiver_feature.from_cpu_tensor(data.x)
-    # quiver_feature = None
 
     print('Let\'s use', world_size, 'GPUs!')
     mp.spawn(

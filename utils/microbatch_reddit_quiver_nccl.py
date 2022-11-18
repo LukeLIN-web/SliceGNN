@@ -87,7 +87,6 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, 
     model = DistributedDataParallel(model, device_ids=[rank])
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
-    # Simulate cases those data can not be fully stored by GPU memory
     y = data.y.to(rank)
 
     for epoch in range(1, 16):

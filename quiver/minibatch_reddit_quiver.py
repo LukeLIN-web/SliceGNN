@@ -12,10 +12,6 @@ from torch_geometric.datasets import Reddit
 from torch_geometric.loader import NeighborSampler
 
 import time
-
-######################
-# Import From Quiver
-######################
 import quiver
 
 
@@ -90,7 +86,6 @@ def run(rank, world_size, data_split, edge_index, x, quiver_sampler: quiver.pyg.
     model = DistributedDataParallel(model, device_ids=[rank])
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
-    # Simulate cases those data can not be fully stored by GPU memory
     y = y.to(rank)
 
     for epoch in range(1, 6):
@@ -135,9 +130,6 @@ if __name__ == '__main__':
 
     csr_topo = quiver.CSRTopo(data.edge_index)
 
-    ##############################
-    # Create Sampler And Feature
-    ##############################
     quiver_sampler = quiver.pyg.GraphSageSampler(
         csr_topo, sizes=[25, 10], device=0, mode='GPU')  # 这里是0, 但是spawn之后会变成fake,然后再lazy init 赋值
     # cache feature 到rank0
