@@ -93,34 +93,38 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, 
     for epoch in range(1, 16):
         model.train()
         epoch_start = default_timer()
-        for seeds in train_loader:
+        seeds = next(iter(train_loader))
+        for i in range(0, len(seeds), 1024):
+            # for seeds in train_loader:
             if rank == 0:
                 n_id, batch_size, adjs = quiver_sampler.sample(seeds)
                 micro_batchs = get_micro_batch(adjs,
                                                n_id,
                                                batch_size, 2)
-                nodeid = [n_id,batch_size]
+                nodeid = [n_id, batch_size]
             else:
                 micro_batchs = [None, None]
-                nodeid = [None,None]
-            dist.broadcast_object_list(nodeid, src=0, device=torch.device(rank) )
+                nodeid = [None, None]
+            dist.broadcast_object_list(
+                nodeid, src=0, device=torch.device(rank))
             dist.broadcast_object_list(
                 micro_batchs, src=0, device=torch.device(rank))
             micro_batch_n_id, micro_batch_size, micro_batch_adjs = micro_batchs[rank]
-            micro_batch_adjs = [adj.to(rank) for adj in micro_batch_adjs]  # load topo
+            micro_batch_adjs = [adj.to(rank)
+                                for adj in micro_batch_adjs]  # load topo
             n_id = nodeid[0]
             mini_batch_batchsize = nodeid[1]
-            out = model(x[n_id][micro_batch_n_id], micro_batch_adjs)  # forward 
-            target_node = n_id[:mini_batch_batchsize][rank * micro_batch_size: (rank+1)*micro_batch_size]
+            out = model(x[n_id][micro_batch_n_id], micro_batch_adjs)  # forward
+            target_node = n_id[:mini_batch_batchsize][rank *
+                                                      micro_batch_size: (rank+1)*micro_batch_size]
             loss = F.nll_loss(
                 out, y[target_node])
             loss.backward()
-            dist.barrier()
             optimizer.step()
-
         dist.barrier()
 
         if rank == 0:
+            assert loss < 300
             print(
                 f'Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {default_timer() - epoch_start}')
 

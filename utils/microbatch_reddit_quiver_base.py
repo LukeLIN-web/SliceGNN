@@ -12,9 +12,6 @@ from torch_geometric.datasets import Reddit
 from torch_geometric.loader import NeighborSampler
 
 import time
-######################
-# Import From Quiver
-######################
 import quiver
 from get_micro_batch import *
 
@@ -77,7 +74,7 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, 
     train_idx = train_idx.split(train_idx.size(0) // world_size)[rank]
 
     train_loader = torch.utils.data.DataLoader(
-        train_idx, batch_size=1024, shuffle=True, drop_last=True)
+        train_idx, batch_size=1024, shuffle=False, drop_last=True)
 
     if rank == 0:
         subgraph_loader = NeighborSampler(data.edge_index, node_idx=None,
@@ -90,6 +87,7 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
     y = data.y.to(rank)
+    micro_batch_num = 2
 
     for epoch in range(1, 6):
         model.train()
@@ -98,7 +96,7 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, 
             n_id, batch_size, adjs = quiver_sampler.sample(seeds)
             micro_batchs = get_micro_batch(adjs,
                                            n_id,
-                                           batch_size, 2)
+                                           batch_size, micro_batch_num)
             optimizer.zero_grad()
             for i, micro_batch in enumerate(micro_batchs):
                 adjs = [adj.to(rank) for adj in micro_batch[2]]  # load topo

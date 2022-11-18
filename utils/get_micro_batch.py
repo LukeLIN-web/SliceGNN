@@ -128,7 +128,7 @@ def get_micro_batch(
     n_id: Tensor,
     batch_size: int,
     num_micro_batch: int = 2,
-) -> List:
+) -> List[List[Adj]]:
     r"""Returns the micro batchs
 
     Args:
@@ -136,7 +136,7 @@ def get_micro_batch(
         hop: subgraph hop times
         num_micro_batch: micro_batch number
 
-    :rtype: List[List]
+    :rtype: List[List[Tensor,int,list]]
     """
     n_id = torch.arange(len(n_id))  # relabel for mini batch
     if batch_size < num_micro_batch:
