@@ -46,13 +46,13 @@ class Adj(NamedTuple):
 
 class Microbatch(NamedTuple):
     n_id: torch.Tensor
-    batch_size: int
+    size: int
     adjs : List[Adj]
 
     def to(self, *args, **kwargs):
         n_id = self.n_id.to(*args, **kwargs) if self.n_id is not None else None
         return Microbatch(self.n_id.to(*args, **kwargs),
-                   self.adjs.to(*args, **kwargs), self.batch_size)
+                   self.adjs.to(*args, **kwargs), self.size)
 
 
 def slice_adj(
@@ -139,7 +139,7 @@ def get_micro_batch(
     n_id: Tensor,
     batch_size: int,
     num_micro_batch: int = 2,
-) -> List[List[Adj]]:
+) -> List[Microbatch]:
     r"""Returns the micro batchs
 
     Args:
@@ -152,6 +152,9 @@ def get_micro_batch(
     n_id = torch.arange(len(n_id))  # relabel for mini batch
     if batch_size < num_micro_batch:
         return [batch_size, n_id, adjs]
+    mod = batch_size % num_micro_batch
+    if mod != 0:
+        batch_size  -=  mod
     assert batch_size % num_micro_batch == 0
     adjs.reverse()
     micro_batch_size = batch_size // num_micro_batch     # TODO: or padding last batch

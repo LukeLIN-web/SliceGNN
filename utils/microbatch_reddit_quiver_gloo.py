@@ -87,7 +87,7 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, 
 
     y = data.y.to(rank)
 
-    for epoch in range(1, 6):
+    for epoch in range(1, 16):
         model.train()
         epoch_start = default_timer()
         for seeds in train_loader:
@@ -105,14 +105,13 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, 
             dist.broadcast_object_list(
                 nodeid, src=0, device=torch.device(rank))
             dist.scatter_object_list(micro_batch, micro_batchs, src=0)
-            micro_batch_n_id, micro_batch_size, micro_batch_adjs = micro_batch[0]
+            micro_batch = micro_batch[0] # micro_batch is a list of tuples
             micro_batch_adjs = [adj.to(rank)
-                                for adj in micro_batch_adjs]  # load topo
+                                for adj in micro_batch.adjs]  # load topo
             n_id, mini_batch_batchsize = nodeid[0], nodeid[1]
-
-            out = model(x[n_id][micro_batch_n_id], micro_batch_adjs)  # forward
+            out = model(x[n_id][micro_batch.n_id], micro_batch_adjs)  # forward
             target_node = n_id[:mini_batch_batchsize][rank *
-                                                      micro_batch_size: (rank+1)*micro_batch_size]
+                                                      micro_batch.size: (rank+1)*micro_batch.size]
             loss = F.nll_loss(
                 out, y[target_node])
             loss.backward()
