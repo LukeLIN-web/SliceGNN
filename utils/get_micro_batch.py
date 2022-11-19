@@ -135,7 +135,7 @@ def slice_adj(
 
 
 def get_micro_batch(
-    adjs,
+    adjs : List[Adj],
     n_id: Tensor,
     batch_size: int,
     num_micro_batch: int = 2,

@@ -124,7 +124,7 @@ def run(rank, world_size, data_split, edge_index, x, quiver_sampler: quiver.pyg.
 
 if __name__ == '__main__':
     dataset = Reddit('/data/Reddit')
-    world_size = torch.cuda.device_count()
+    world_size = 2 # torch.cuda.device_count()
 
     data = dataset[0]
 
