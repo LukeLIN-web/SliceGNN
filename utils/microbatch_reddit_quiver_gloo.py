@@ -63,7 +63,7 @@ class SAGE(torch.nn.Module):
         return x_all
 
 
-def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, dataset,args):
+def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, dataset, args):
 
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '12355'
@@ -97,26 +97,29 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, 
                 n_id, batch_size, adjs = quiver_sampler.sample(seeds)
                 micro_batchs = get_micro_batch(adjs,
                                                n_id,
-                                            #    batch_size, world_size)
-                                            batch_size, world_size)
+                                               #    batch_size, world_size)
+                                               batch_size, world_size*args.micro_pergpu)
+                micro_batchs = [ micro_batchs[ i *args.micro_pergpu:(i+1) *args.micro_pergpu] for i in range(world_size)]
                 nodeid = [n_id]
             else:
                 micro_batchs = []
                 nodeid = [None]
-            micro_batch = [None]
             dist.broadcast_object_list(
                 nodeid, src=0, device=torch.device(rank))
-            dist.scatter_object_list(micro_batch, micro_batchs, src=0)
-            
-            micro_batch = micro_batch[0]  # micro_batch is a list of tuples
-            micro_batch_adjs = [adj.to(rank)
-                                for adj in micro_batch.adjs]  # load topo
             n_id = nodeid[0]
-            target_node = n_id[:len(seeds)][rank *(len(seeds)//world_size): (rank+1)*(len(seeds)//world_size)]
-            out = model(x[n_id][micro_batch.n_id], micro_batch_adjs)  # forward
-            loss = F.nll_loss(
-                out, y[target_node])
-            loss.backward()
+            outputlist = [None]
+            dist.scatter_object_list(outputlist, micro_batchs, src=0)
+            target_node = n_id[:len(
+                seeds)][rank * (len(seeds)//world_size): (rank+1)*(len(seeds)//world_size)]
+            for i in range(len(outputlist[0])):
+                micro_batch = outputlist[0][i]
+                micro_batch_adjs = [adj.to(rank)
+                                    for adj in micro_batch.adjs]  # load topo
+                out = model(x[n_id][micro_batch.n_id],
+                            micro_batch_adjs)  # forward
+                loss = F.nll_loss(
+                    out, y[target_node][i * (micro_batch.size):(i+1) * (micro_batch.size)])
+                loss.backward()
             optimizer.step()
 
         dist.barrier()
@@ -142,18 +145,18 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Quiver')
-    parser.add_argument('--gpu_num', type=int, default=3)
-    parser.add_argument('--microbatch_pergpu', type=int, default=2)
+    parser.add_argument('--gpu_num', type=int, default=2)
+    parser.add_argument('--micro_pergpu', type=int, default=2)
     args = parser.parse_args()
     dataset = Reddit('/data/Reddit')
-    world_size =  args.gpu_num  # torch.cuda.device_count()
+    world_size = args.gpu_num  # torch.cuda.device_count()
 
     data = dataset[0]
     csr_topo = quiver.CSRTopo(data.edge_index)
 
     quiver_sampler = quiver.pyg.GraphSageSampler(
         csr_topo, sizes=[25, 10], device=0, mode='GPU')  # 这里是0, 但是spawn之后会变成fake,然后再lazy init 赋值
-    # cache feature 到rank0
+
     quiver_feature = quiver.Feature(rank=0, device_list=list(range(
         world_size)), device_cache_size="2G", cache_policy="device_replicate", csr_topo=csr_topo)
     quiver_feature.from_cpu_tensor(data.x)
@@ -162,7 +165,7 @@ if __name__ == '__main__':
     mp.spawn(
         run,
         args=(world_size, data, quiver_feature,
-              quiver_sampler, dataset,args),
+              quiver_sampler, dataset, args),
         nprocs=world_size,
         join=True
     )
