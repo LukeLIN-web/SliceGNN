@@ -63,7 +63,7 @@ class SAGE(torch.nn.Module):
         return x_all
 
 
-def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, dataset):
+def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, dataset,args):
 
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '12355'
@@ -98,7 +98,7 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, 
                 micro_batchs = get_micro_batch(adjs,
                                                n_id,
                                             #    batch_size, world_size)
-                                            batch_size, world_size*args.microbatch_pergpu)
+                                            batch_size, world_size)
                 nodeid = [n_id]
             else:
                 micro_batchs = []
@@ -107,13 +107,13 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, 
             dist.broadcast_object_list(
                 nodeid, src=0, device=torch.device(rank))
             dist.scatter_object_list(micro_batch, micro_batchs, src=0)
+            
             micro_batch = micro_batch[0]  # micro_batch is a list of tuples
             micro_batch_adjs = [adj.to(rank)
                                 for adj in micro_batch.adjs]  # load topo
             n_id = nodeid[0]
+            target_node = n_id[:len(seeds)][rank *(len(seeds)//world_size): (rank+1)*(len(seeds)//world_size)]
             out = model(x[n_id][micro_batch.n_id], micro_batch_adjs)  # forward
-            target_node = n_id[:len(seeds)][rank *
-                                      micro_batch.size: (rank+1)*micro_batch.size]
             loss = F.nll_loss(
                 out, y[target_node])
             loss.backward()
