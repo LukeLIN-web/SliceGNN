@@ -146,7 +146,7 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Quiver')
     parser.add_argument('--gpu_num', type=int, default=2)
-    parser.add_argument('--micro_pergpu', type=int, default=2)
+    parser.add_argument('--micro_pergpu', type=int, default=1)
     args = parser.parse_args()
     dataset = Reddit('/data/Reddit')
     world_size = args.gpu_num  # torch.cuda.device_count()

@@ -94,7 +94,6 @@ def run(rank, world_size, data_split, edge_index, x, quiver_sampler: quiver.pyg.
         for seeds in train_loader:
             n_id, batch_size, adjs = quiver_sampler.sample(seeds)
             adjs = [adj.to(rank) for adj in adjs]
-
             optimizer.zero_grad()
             out = model(x[n_id].to(rank), adjs)
             loss = F.nll_loss(out, y[n_id[:batch_size]])

@@ -1,3 +1,4 @@
+import argparse
 import os
 
 import torch
@@ -11,7 +12,7 @@ from torch_geometric.nn import SAGEConv
 from torch_geometric.datasets import Reddit
 from torch_geometric.loader import NeighborSampler
 
-import time
+from timeit import default_timer
 import quiver
 from get_micro_batch import *
 
@@ -62,7 +63,7 @@ class SAGE(torch.nn.Module):
         return x_all
 
 
-def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, dataset):
+def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, dataset,args):
 
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '12355'
@@ -71,7 +72,7 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, 
     torch.cuda.set_device(rank)
 
     train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
-    train_idx = train_idx.split(train_idx.size(0) // world_size)[rank]
+    # train_idx = train_idx.split(train_idx.size(0) // world_size)[rank]
 
     train_loader = torch.utils.data.DataLoader(
         train_idx, batch_size=1024, shuffle=False, drop_last=True)
@@ -87,31 +88,27 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
     y = data.y.to(rank)
-    micro_batch_num = 2
 
-    for epoch in range(1, 6):
+    for epoch in range(1, 16):
         model.train()
-        epoch_start = time.time()
+        epoch_start = default_timer()
         for seeds in train_loader:
-            n_id, batch_size, adjs = quiver_sampler.sample(seeds)
-            micro_batchs = get_micro_batch(adjs,
-                                           n_id,
-                                           batch_size, micro_batch_num)
             optimizer.zero_grad()
-            for i, micro_batch in enumerate(micro_batchs):
-                adjs = [adj.to(rank) for adj in micro_batch[2]]  # load topo
-                out = model(x[n_id][micro_batch[0]], adjs)  # forward
-                target_node = n_id[:batch_size][i * micro_batch[1]: (i+1)*micro_batch[1]]
-                loss = F.nll_loss(
-                    out, y[target_node])
-                loss.backward()
+            microseeds = seeds[rank * seeds.size(0) // world_size: (rank + 1) * seeds.size(0) // world_size]
+            n_id, batch_size, adjs = quiver_sampler.sample(microseeds)
+            target_node = n_id[:len(seeds)]
+            micro_batch_adjs = [adj.to(rank)
+                                    for adj in adjs]  # load topo
+            out = model(x[n_id],micro_batch_adjs)  # forward
+            loss = F.nll_loss(out, y[target_node][:batch_size])
+            loss.backward()
             optimizer.step()
 
         dist.barrier()
 
         if rank == 0:
             print(
-                f'Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {time.time() - epoch_start}')
+                f'Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {default_timer() - epoch_start}')
 
         if rank == 0 and epoch % 5 == 0:  # We evaluate on a single GPU for now
             model.eval()
@@ -130,8 +127,11 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, 
 
 if __name__ == '__main__':
     dataset = Reddit('/data/Reddit')
-    world_size = 2  # torch.cuda.device_count()
-
+    parser = argparse.ArgumentParser(description='Quiver')
+    parser.add_argument('--gpu_num', type=int, default=3)
+    parser.add_argument('--micro_pergpu', type=int, default=1)
+    args = parser.parse_args()
+    world_size = args.gpu_num  # torch.cuda.device_count()
     data = dataset[0]
 
     csr_topo = quiver.CSRTopo(data.edge_index)
@@ -147,7 +147,7 @@ if __name__ == '__main__':
     mp.spawn(
         run,
         args=(world_size, data, quiver_feature,
-              quiver_sampler, dataset),
+              quiver_sampler, dataset,args),
         nprocs=world_size,
         join=True
     )
