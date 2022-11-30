@@ -29,4 +29,5 @@ jobs:
           pwd
           #ls ${{ github.workspace }}
           ls
+          pytest test_getmicrobatch.py
       - run: echo "🍏 This job's status is ${{ job.status }}."
