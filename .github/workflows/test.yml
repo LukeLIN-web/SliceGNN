@@ -27,6 +27,7 @@ jobs:
       - name: List files in the repository
         run: |
           pwd
+          pip install pytest
           #ls ${{ github.workspace }}
           ls
           pytest test_getmicrobatch.py
