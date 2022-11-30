@@ -27,8 +27,10 @@ jobs:
       - name: List files in the repository
         run: |
           pwd
-          pip install pytest
           #ls ${{ github.workspace }}
           ls
+      - name: test
+        run: |
+          pip install pytest
           pytest test_getmicrobatch.py
       - run: echo "🍏 This job's status is ${{ job.status }}."
