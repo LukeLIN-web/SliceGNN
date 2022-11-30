@@ -13,7 +13,7 @@ jobs:
         - 80
       volumes:
         - my_docker_volume:/volume_mount
-      options: --cpus 1
+      options: -v ${{ github.workspace }}:/work 
     steps:
       - name: Check for dockerenv file
         run: (ls /.dockerenv && echo Found dockerenv) || (echo No dockerenv)
@@ -28,4 +28,5 @@ jobs:
         run: |
           pwd
           #ls ${{ github.workspace }}
+          ls
       - run: echo "🍏 This job's status is ${{ job.status }}."
