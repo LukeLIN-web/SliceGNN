@@ -9,13 +9,13 @@ def slice_adj(
     relabel_nodes: bool = False,
     num_nodes: Optional[int] = None,
     flow: str = 'source_to_target',
-) -> Tuple[Tensor, Tensor,  Tensor]: 
+) -> Tuple[Tensor, Tensor,  Tensor]:
 
 def get_micro_batch(
-    adjs: List[EdgeIndex],
+    adjs : List[Adj],
     n_id: Tensor,
     batch_size: int,
-    num_micro_batch: int = 2,
-) -> List[namedtuple('micro_batch', ['bach_size', 'nid', 'adjs'])]:
+    num_micro_batch: int,
+) -> List[Microbatch]:
 
 ```
