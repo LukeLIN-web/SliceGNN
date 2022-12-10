@@ -8,7 +8,6 @@ from tqdm import tqdm
 
 import os
 from utils import get_dataset, get_micro_batch
-from torch_geometric.loader import NeighborLoader
 from torch_geometric.nn import SAGEConv
 from torch_geometric.profile import rename_profile_file, timeit
 import quiver
@@ -80,8 +79,7 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler,n
                 loss.backward()
                 optimizer.step()
         else:
-            for seeds in train_loader:
-                with torch.profiler.profile(
+            with torch.profiler.profile(
                     activities=[
                         torch.profiler.ProfilerActivity.CPU,
                         torch.profiler.ProfilerActivity.CUDA,
@@ -91,18 +89,20 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler,n
                     with_stack=True,
                     with_flops=True
                 ) as prof:
-                    optimizer.zero_grad()
-                    microseeds = seeds[rank * seeds.size(0) // world_size: (
-                        rank + 1) * seeds.size(0) // world_size]
-                    n_id, batch_size, adjs = quiver_sampler.sample(microseeds)
-                    target_node = n_id[:len(seeds)]
-                    micro_batch_adjs = [adj.to(rank)
-                                        for adj in adjs]  # load topo
-                    out = model(x[n_id], micro_batch_adjs)  # forward
-                    loss = F.nll_loss(out, y[target_node][:batch_size])
-                    loss.backward()
-                    optimizer.step()
-                print(prof.key_averages().table(
+                for seeds in train_loader:
+
+                        optimizer.zero_grad()
+                        microseeds = seeds[rank * seeds.size(0) // world_size: (
+                            rank + 1) * seeds.size(0) // world_size]
+                        n_id, batch_size, adjs = quiver_sampler.sample(microseeds)
+                        target_node = n_id[:len(seeds)]
+                        micro_batch_adjs = [adj.to(rank)
+                                            for adj in adjs]  # load topo
+                        out = model(x[n_id], micro_batch_adjs)  # forward
+                        loss = F.nll_loss(out, y[target_node][:batch_size])
+                        loss.backward()
+                        optimizer.step()
+            print(prof.key_averages().table(
                         sort_by="cpu_time_total", row_limit=10))
 
         dist.barrier()
