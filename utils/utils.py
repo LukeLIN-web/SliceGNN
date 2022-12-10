@@ -30,33 +30,33 @@ models_dict = {
 
 def get_dataset(name, root, use_sparse_tensor=False, bf16=False):
     path = osp.join(osp.dirname(osp.realpath(__file__)), root, name)
-    transform = T.ToSparseTensor(
-        remove_edge_index=False) if use_sparse_tensor else None
-    if name == 'ogbn-mag':
-        if transform is None:
-            transform = T.ToUndirected(merge=True)
-        else:
-            transform = T.Compose([T.ToUndirected(merge=True), transform])
-        dataset = OGB_MAG(root=path, preprocess='metapath2vec',
-                          transform=transform)
-    elif name == 'ogbn-products':
-        dataset = PygNodePropPredDataset('ogbn-products', root=path,
-                                         transform=transform)
-    elif name == 'Reddit':
-        dataset = Reddit(root=path, transform=transform)
+    # transform = T.ToSparseTensor(
+    #     remove_edge_index=False) if use_sparse_tensor else None
+    # if name == 'ogbn-mag':
+    #     if transform is None:
+    #         transform = T.ToUndirected(merge=True)
+    #     else:
+    #         transform = T.Compose([T.ToUndirected(merge=True), transform])
+    #     dataset = OGB_MAG(root=path, preprocess='metapath2vec',
+    #                       transform=transform)
+    # elif name == 'ogbn-products':
+    #     dataset = PygNodePropPredDataset('ogbn-products', root=path,
+    #                                      transform=transform)
+    if name == 'Reddit':
+        dataset = Reddit(root=path)
 
     data = dataset[0]
 
-    if name == 'ogbn-products':
-        split_idx = dataset.get_idx_split()
-        data.train_mask = index_to_mask(split_idx['train'],
-                                        size=data.num_nodes)
-        data.val_mask = index_to_mask(split_idx['valid'], size=data.num_nodes)
-        data.test_mask = index_to_mask(split_idx['test'], size=data.num_nodes)
-        data.y = data.y.squeeze()
+    # if name == 'ogbn-products':
+    #     split_idx = dataset.get_idx_split()
+    #     data.train_mask = index_to_mask(split_idx['train'],
+    #                                     size=data.num_nodes)
+    #     data.val_mask = index_to_mask(split_idx['valid'], size=data.num_nodes)
+    #     data.test_mask = index_to_mask(split_idx['test'], size=data.num_nodes)
+    #     data.y = data.y.squeeze()
 
-    if bf16:
-        data.x = data.x.to(torch.bfloat16)
+    # if bf16:
+    #     data.x = data.x.to(torch.bfloat16)
 
     return data, dataset.num_classes
 
