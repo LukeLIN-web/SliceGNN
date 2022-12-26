@@ -116,8 +116,8 @@ def main(args: argparse.ArgumentParser) -> None:
     print('Let\'s use', world_size, 'GPUs!')
     print('BENCHMARK STARTS')
 
-# for batch_size in args.batch_sizes:
 # 就传入, 函数参数多一些没关系.
+    # for batch_size in args.batch_sizes: # 但是batch size 要求sum 而不是mean
     mp.spawn(
         run,
         args=(world_size, data, quiver_feature,
