@@ -13,28 +13,7 @@ import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel
 import torch.multiprocessing as mp
 import numpy as np
-
-
-class SAGE(torch.nn.Module):
-    def __init__(self, in_channels, hidden_channels, out_channels,
-                 num_layers=2):
-        super(SAGE, self).__init__()
-        self.num_layers = num_layers
-
-        self.convs = torch.nn.ModuleList()
-        self.convs.append(SAGEConv(in_channels, hidden_channels))
-        for _ in range(self.num_layers - 2):
-            self.convs.append(SAGEConv(hidden_channels, hidden_channels))
-        self.convs.append(SAGEConv(hidden_channels, out_channels))
-
-    def forward(self, x, adjs):
-        for i, (edge_index, _, size) in enumerate(adjs):
-            x_target = x[:size[1]]  # Target nodes are always placed first.
-            x = self.convs[i]((x, x_target), edge_index)
-            if i != self.num_layers - 1:
-                x = F.relu(x)
-                x = F.dropout(x, p=0.5, training=self.training)
-        return x.log_softmax(dim=-1)
+from utils.model import SAGE
 
 
 def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, num_classes, args: argparse.ArgumentParser):
