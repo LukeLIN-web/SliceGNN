@@ -1,3 +1,12 @@
+
+'''
+sample : NeighborSampler
+dataset: reddit
+getmicrobatch : no
+Each part timing: yes 
+'''
+
+
 import os
 from statistics import mean
 
