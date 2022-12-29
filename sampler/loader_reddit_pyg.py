@@ -4,6 +4,7 @@ copy from pytorch geometic  repo examples/
 sample : NeighborLoader
 dataset: reddit
 getmicrobatch : no
+Each part timing: no
 '''
 
 import copy
