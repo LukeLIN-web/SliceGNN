@@ -12,11 +12,6 @@ multi_gpu() {
 
 test() {
     multigpu 4
-    # multigpu 2
-    # multigpu 1
-    # epochtimetest 4
-    # epochtimetest 2
-    # epochtimetest 1
 }
 
 single_gpu() {
@@ -38,5 +33,12 @@ clear() {
     rm logs/*gpu.log
 }
 
-# compare 4
-multi_gpu 2
+Loader_reddit_pyg(){
+    python3 $dir/loader_reddit_pyg.py --gpus $1  > logs/loader_reddit_pyg_gpu$1.log
+    pid=$!
+    wait $pid
+}
+
+Loader_reddit_pyg 1
+Loader_reddit_pyg 2
+Loader_reddit_pyg 3

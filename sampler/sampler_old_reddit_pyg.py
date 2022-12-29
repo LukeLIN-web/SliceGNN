@@ -1,5 +1,6 @@
+# old NeighborSampler pytorch geometic  repo examples/ 
+
 import os
-from statistics import mean
 
 import torch
 import torch.distributed as dist
@@ -14,7 +15,6 @@ from torch_geometric.nn import SAGEConv
 
 from timeit import default_timer
 import argparse
-from get_micro_batch import *
 
 
 class SAGE(torch.nn.Module):
@@ -63,72 +63,50 @@ class SAGE(torch.nn.Module):
         return x_all
 
 
-def run(rank, world_size, dataset, args):
+def run(rank, world_size, dataset):
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '12355'
     dist.init_process_group('nccl', rank=rank, world_size=world_size)
 
     data = dataset[0]
     train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
-    train_idx = train_idx.split(train_idx.size(
-        0) // world_size)[rank]  # train idx shape is ?
+    train_idx = train_idx.split(train_idx.size(0) // world_size)[rank]
 
     train_loader = NeighborSampler(data.edge_index, node_idx=train_idx,
                                    sizes=[25, 10], batch_size=1024,
-                                   shuffle=True, num_workers=14, drop_last=True)
-    # 第一层每个node 25个neibor, 第二层每个node 访问10个.
+                                   shuffle=True, num_workers=0)
+
     if rank == 0:
         subgraph_loader = NeighborSampler(data.edge_index, node_idx=None,
-                                          sizes=[-1], batch_size=16,
-                                          shuffle=False, num_workers=0)
+                                          sizes=[-1], batch_size=2048,
+                                          shuffle=False, num_workers=6)
 
     torch.manual_seed(12345)
     model = SAGE(dataset.num_features, 256, dataset.num_classes).to(rank)
-    # guartee  final  allreduce avg gradient
     model = DistributedDataParallel(model, device_ids=[rank])
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
     x, y = data.x.to(rank), data.y.to(rank)
 
-    for epoch in range(1, 4):
+    for epoch in range(1, 11):
         model.train()
-        loadtimes,  gputimes = [], []
-        get_micro_batch_times = []
         start = default_timer()
         for batch_size, n_id, adjs in train_loader:
-            dataloadtime = default_timer()
-            micro_batchs = get_micro_batch(adjs,
-                                           n_id,
-                                           batch_size, args.num_micro_batch)
-            get_micro_batch_time = default_timer()
+            adjs = [adj.to(rank) for adj in adjs]
+
             optimizer.zero_grad()
-            for i, micro_batch in enumerate(micro_batchs):
-                adjs = [adj.to(rank) for adj in micro_batch.adjs]  # load topo
-                out = model(x[n_id][micro_batch.nid], adjs)  # forward
-                loss = F.nll_loss(
-                    out, y[n_id[:batch_size]][i * micro_batch.batch_size: (i+1)*micro_batch.batch_size])
-                loss.backward()
+            out = model(x[n_id], adjs)
+            loss = F.nll_loss(out, y[n_id[:batch_size]])
+            loss.backward()
             optimizer.step()
-            stop = default_timer()
-            get_micro_batch_times.append(get_micro_batch_time - dataloadtime)
-            loadtimes.append(dataloadtime - start)
-            gputimes.append(stop - dataloadtime)
-            start = default_timer()
 
         dist.barrier()
 
         if rank == 0:
-            avg_get_micro_batch_times = round(
-                mean(get_micro_batch_times[5:-5]), 3)
-            print(f'Epoch: {epoch:03d}, Loss: {loss:.4f}')
-            avggputime = round(mean(gputimes[5:-5]), 3)
-            avgloadtime = round(mean(loadtimes[5:-5]), 3)
-            print(f'avg_get_micro_batch_times={avg_get_micro_batch_times}, batchloadtime={avgloadtime}, '
-                  f' gputime = {avggputime} ')
-            print(f'batch size={batch_size}, batchloadtime={avgloadtime}, '
-                  f' gputime = {avggputime} ')
+            print(
+                f'Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {default_timer() - start}')
 
-        if rank == 0 and epoch % 1 == 0:  # We evaluate on a single GPU for now
+        if rank == 0 and epoch % 5 == 0:  # We evaluate on a single GPU for now
             model.eval()
             with torch.no_grad():
                 out = model.module.inference(x, rank, subgraph_loader)
@@ -143,18 +121,13 @@ def run(rank, world_size, dataset, args):
     dist.destroy_process_group()
 
 
-# gpu =2 , acc = 0.9590 没有降低
 if __name__ == '__main__':
-    datapath = "/root/share/data/Reddit"
-    dataset = Reddit(datapath)
-
+    dataset = Reddit('/data/Reddit')
     parser = argparse.ArgumentParser()
+    parser.add_argument('--num_epochs', type=int, default=4)
     parser.add_argument('--gpus', type=int, default=2)
-    parser.add_argument('--num_micro_batch', type=int, default=4)
+    
     args = parser.parse_args()
-
-    # world_size = torch.cuda.device_count()
-    world_size = args.gpus  # small case for debug
-    print('Let\'s use', args.gpus, 'GPUs!')
-    mp.spawn(run, args=(world_size, dataset, args),
-             nprocs=world_size, join=True)
+    world_size = args.num_gpu 
+    print('Let\'s use', world_size, 'GPUs!')
+    mp.spawn(run, args=(world_size, dataset), nprocs=world_size, join=True)
