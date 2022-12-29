@@ -17,6 +17,8 @@ import quiver
 import argparse
 
 
+# tested Neighborsampler  , very slower than origin quiver sampler. 
+
 class SAGE(torch.nn.Module):
     def __init__(self, in_channels: int, hidden_channels: int,
                  out_channels: int, num_layers: int = 2):
@@ -49,8 +51,8 @@ class SAGE(torch.nn.Module):
         for i, conv in enumerate(self.convs):
             xs = []
             for batch in subgraph_loader:
-                x = x_all[batch.node_id.to(x_all.device)].to(device)
-                x = conv(x, batch.edge_index.to(device))
+                x = x_all[batch.node_id.to(x_all.device)]
+                x = conv(x, batch.edge_index)
                 x = x[:batch.batch_size]
                 if i < len(self.convs) - 1:
                     x = x.relu_()
@@ -62,7 +64,7 @@ class SAGE(torch.nn.Module):
         return x_all
 
 
-def run(rank, world_size, data, x, num_features :int, num_classes : int ):
+def run(rank, world_size, data, x, num_features: int, num_classes: int):
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '12355'
     dist.init_process_group('nccl', rank=rank, world_size=world_size)
@@ -91,12 +93,12 @@ def run(rank, world_size, data, x, num_features :int, num_classes : int ):
     model = DistributedDataParallel(model, device_ids=[rank])
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
-    for epoch in range(1, 6):
+    for epoch in range(1, 21):
         model.train()
         epoch_start = default_timer()
         for batch in train_loader:
             optimizer.zero_grad()
-            out = model(batch.x, batch.edge_index.to(rank))[:batch.batch_size]
+            out = model(batch.x, batch.edge_index)[:batch.batch_size]
             loss = F.cross_entropy(out, batch.y[:batch.batch_size])
             loss.backward()
             optimizer.step()
@@ -111,7 +113,7 @@ def run(rank, world_size, data, x, num_features :int, num_classes : int ):
             model.eval()
             with torch.no_grad():
                 out = model.module.inference(x, rank, subgraph_loader)
-            res = out.argmax(dim=-1) == data.y.to(out.device)
+            res = out.argmax(dim=-1) == data.y
             acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
             acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
             acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
@@ -143,7 +145,8 @@ if __name__ == '__main__':
 
     mp.spawn(
         run,
-        args=(world_size,  data, quiver_feature, dataset.num_features, dataset.num_classes),
+        args=(world_size,  data, quiver_feature,
+              dataset.num_features, dataset.num_classes),
         nprocs=world_size,
         join=True
     )

@@ -14,8 +14,9 @@ from torch_geometric.loader import NeighborSampler
 
 import quiver
 from timeit import default_timer
-from get_micro_batch import *
+from get_micro_batch import get_micro_batch
 from model import SAGE
+
 
 def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, dataset, args):
 
@@ -51,9 +52,9 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, 
                 n_id, batch_size, adjs = quiver_sampler.sample(seeds)
                 micro_batchs = get_micro_batch(adjs,
                                                n_id,
-                                               #    batch_size, world_size)
                                                batch_size, world_size*args.micro_pergpu)
-                micro_batchs = [ micro_batchs[ i *args.micro_pergpu:(i+1) *args.micro_pergpu] for i in range(world_size)]
+                micro_batchs = [
+                    micro_batchs[i * args.micro_pergpu:(i+1) * args.micro_pergpu] for i in range(world_size)]
                 nodeid = [n_id]
             else:
                 micro_batchs = []

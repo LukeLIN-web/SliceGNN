@@ -1,6 +1,6 @@
 
 '''
-sample : NeighborLoader
+sample : quiver_sampler
 dataset: reddit
 getmicrobatch : no
 '''
@@ -18,7 +18,7 @@ from torch_geometric.nn import SAGEConv
 from torch_geometric.datasets import Reddit
 from torch_geometric.loader import NeighborSampler
 
-import time
+from timeit import default_timer
 import quiver
 
 
@@ -97,7 +97,7 @@ def run(rank, world_size, data_split, edge_index, x, quiver_sampler: quiver.pyg.
 
     for epoch in range(1, 6):
         model.train()
-        epoch_start = time.time()
+        epoch_start = default_timer()
         for seeds in train_loader:
             n_id, batch_size, adjs = quiver_sampler.sample(seeds)
             adjs = [adj.to(rank) for adj in adjs]
@@ -111,7 +111,7 @@ def run(rank, world_size, data_split, edge_index, x, quiver_sampler: quiver.pyg.
 
         if rank == 0:
             print(
-                f'Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {time.time() - epoch_start}')
+                f'Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {default_timer() - epoch_start}')
 
         if rank == 0 and epoch % 5 == 0:  # We evaluate on a single GPU for now
             model.eval()
@@ -130,7 +130,7 @@ def run(rank, world_size, data_split, edge_index, x, quiver_sampler: quiver.pyg.
 
 if __name__ == '__main__':
     dataset = Reddit('/data/Reddit')
-    world_size = 2 # torch.cuda.device_count()
+    world_size = 2  # torch.cuda.device_count()
 
     data = dataset[0]
 

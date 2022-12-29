@@ -24,6 +24,7 @@ from torch_geometric.nn import SAGEConv
 from timeit import default_timer
 import argparse
 
+
 class SAGE(torch.nn.Module):
     def __init__(self, in_channels: int, hidden_channels: int,
                  out_channels: int, num_layers: int = 2):
@@ -115,7 +116,6 @@ def run(rank, world_size, dataset):
             print(
                 f'Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {default_timer() - start}')
 
-
         if rank == 0 and epoch % 5 == 0:  # We evaluate on a single GPU for now
             model.eval()
             with torch.no_grad():
@@ -137,7 +137,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_epochs', type=int, default=4)
     parser.add_argument('--gpus', type=int, default=2)
     args = parser.parse_args()
-    
+
     world_size = args.gpus
     print('Let\'s use', world_size, 'GPUs!')
     mp.spawn(run, args=(world_size, dataset), nprocs=world_size, join=True)
