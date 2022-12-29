@@ -16,7 +16,6 @@ import torch.multiprocessing as mp
 import torch.nn.functional as F
 from torch import Tensor
 from torch.nn.parallel import DistributedDataParallel
-# from tqdm import tqdm
 
 from torch_geometric.datasets import Reddit
 from torch_geometric.loader import NeighborLoader
@@ -137,8 +136,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--num_epochs', type=int, default=4)
     parser.add_argument('--gpus', type=int, default=2)
-
     args = parser.parse_args()
+    
     world_size = args.gpus
     print('Let\'s use', world_size, 'GPUs!')
     mp.spawn(run, args=(world_size, dataset), nprocs=world_size, join=True)

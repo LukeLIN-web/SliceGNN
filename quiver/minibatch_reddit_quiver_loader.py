@@ -9,10 +9,12 @@ from torch.nn.parallel import DistributedDataParallel
 
 from torch_geometric.nn import SAGEConv
 from torch_geometric.datasets import Reddit
-from torch_geometric.loader import NeighborSampler
+from torch_geometric.loader import NeighborLoader
 
-import time
+import copy
+from timeit import default_timer
 import quiver
+import argparse
 
 
 class SAGE(torch.nn.Module):
@@ -61,42 +63,42 @@ class SAGE(torch.nn.Module):
         return x_all
 
 
-def run(rank, world_size, data_split, edge_index, x, quiver_sampler: quiver.pyg.GraphSageSampler, y, num_features, num_classes):
-
+def run(rank, world_size, data, x, num_features :int, num_classes : int ):
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '12355'
     dist.init_process_group('nccl', rank=rank, world_size=world_size)
 
     torch.cuda.set_device(rank)
+    data = data.to(rank, 'y')  # Move to device for faster feature fetch.
 
-    train_mask, val_mask, test_mask = data_split
-    train_idx = train_mask.nonzero(as_tuple=False).view(-1)
+    train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
     train_idx = train_idx.split(train_idx.size(0) // world_size)[rank]
 
-    train_loader = torch.utils.data.DataLoader(
-        train_idx, batch_size=1024, shuffle=True, drop_last=True)
+    kwargs = dict(batch_size=1024, num_workers=4, persistent_workers=True)
+    train_loader = NeighborLoader(data, input_nodes=train_idx,
+                                  num_neighbors=[25, 10], shuffle=True,
+                                  drop_last=True, **kwargs)
 
-    if rank == 0:
-        subgraph_loader = NeighborSampler(edge_index, node_idx=None,
-                                          sizes=[-1], batch_size=2048,
-                                          shuffle=False, num_workers=6)
+    if rank == 0:  # Create single-hop evaluation neighbor loader:
+        subgraph_loader = NeighborLoader(copy.copy(data), num_neighbors=[-1],
+                                         shuffle=False, **kwargs)
+        # No need to maintain these features during evaluation:
+        del subgraph_loader.data.x, subgraph_loader.data.y
+        # Add global node index information:
+        subgraph_loader.data.node_id = torch.arange(data.num_nodes)
 
     torch.manual_seed(12345)
     model = SAGE(num_features, 256, num_classes).to(rank)
     model = DistributedDataParallel(model, device_ids=[rank])
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
-    y = y.to(rank)
-
     for epoch in range(1, 6):
         model.train()
-        epoch_start = time.time()
-        for seeds in train_loader:
-            n_id, batch_size, adjs = quiver_sampler.sample(seeds)
-            adjs = [adj.to(rank) for adj in adjs]
+        epoch_start = default_timer()
+        for batch in train_loader:
             optimizer.zero_grad()
-            out = model(x[n_id].to(rank), adjs)
-            loss = F.nll_loss(out, y[n_id[:batch_size]])
+            out = model(batch.x, batch.edge_index.to(rank))[:batch.batch_size]
+            loss = F.cross_entropy(out, batch.y[:batch.batch_size])
             loss.backward()
             optimizer.step()
 
@@ -104,16 +106,16 @@ def run(rank, world_size, data_split, edge_index, x, quiver_sampler: quiver.pyg.
 
         if rank == 0:
             print(
-                f'Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {time.time() - epoch_start}')
+                f'Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {default_timer() - epoch_start:.4f}')
 
         if rank == 0 and epoch % 5 == 0:  # We evaluate on a single GPU for now
             model.eval()
             with torch.no_grad():
                 out = model.module.inference(x, rank, subgraph_loader)
-            res = out.argmax(dim=-1) == y
-            acc1 = int(res[train_mask].sum()) / int(train_mask.sum())
-            acc2 = int(res[val_mask].sum()) / int(val_mask.sum())
-            acc3 = int(res[test_mask].sum()) / int(test_mask.sum())
+            res = out.argmax(dim=-1) == data.y.to(out.device)
+            acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
+            acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
+            acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
             print(f'Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}')
 
         dist.barrier()
@@ -123,25 +125,26 @@ def run(rank, world_size, data_split, edge_index, x, quiver_sampler: quiver.pyg.
 
 if __name__ == '__main__':
     dataset = Reddit('/data/Reddit')
-    world_size = 2 # torch.cuda.device_count()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--num_epochs', type=int, default=4)
+    parser.add_argument('--gpus', type=int, default=2)
+    args = parser.parse_args()
+    world_size = args.gpus
 
     data = dataset[0]
 
     csr_topo = quiver.CSRTopo(data.edge_index)
 
-    quiver_sampler = quiver.pyg.GraphSageSampler(
-        csr_topo, sizes=[25, 10], device=0, mode='GPU')  # 这里是0, 但是spawn之后会变成fake,然后再lazy init 赋值
     # cache feature 到rank0
     quiver_feature = quiver.Feature(rank=0, device_list=list(range(
         world_size)), device_cache_size="2G", cache_policy="device_replicate", csr_topo=csr_topo)
     quiver_feature.from_cpu_tensor(data.x)
 
     print('Let\'s use', world_size, 'GPUs!')
-    data_split = (data.train_mask, data.val_mask, data.test_mask)
+
     mp.spawn(
         run,
-        args=(world_size, data_split, data.edge_index, quiver_feature,
-              quiver_sampler, data.y, dataset.num_features, dataset.num_classes),
+        args=(world_size,  data, quiver_feature, dataset.num_features, dataset.num_classes),
         nprocs=world_size,
         join=True
     )
