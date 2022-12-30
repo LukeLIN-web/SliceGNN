@@ -4,6 +4,8 @@ import torch
 import torch.nn.functional as F
 
 
+
+# use for quiver sampler 
 class SAGE(torch.nn.Module):
     def __init__(self, in_channels, hidden_channels, out_channels,
                  num_layers=2):

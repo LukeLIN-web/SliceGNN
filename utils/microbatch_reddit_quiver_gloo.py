@@ -2,13 +2,11 @@ import argparse
 import os
 
 import torch
-from tqdm import tqdm
 import torch.nn.functional as F
 import torch.multiprocessing as mp
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel
 
-from torch_geometric.nn import SAGEConv
 from torch_geometric.datasets import Reddit
 from torch_geometric.loader import NeighborSampler
 
@@ -55,13 +53,18 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, 
                                                batch_size, world_size*args.micro_pergpu)
                 micro_batchs = [
                     micro_batchs[i * args.micro_pergpu:(i+1) * args.micro_pergpu] for i in range(world_size)]
-                nodeid = [n_id]
+                # n_id.to(rank)
+                nodeid = [n_id] # because we don't know n_id length, so we use list
             else:
                 micro_batchs = []
                 nodeid = [None]
+                # n_id = torch.zeros(145000, dtype=torch.int64).to(rank)
             dist.broadcast_object_list(
                 nodeid, src=0, device=torch.device(rank))
+            # dist.broadcast(n_id, src=0)
+            # n_id = n_id.nonzero().flatten()
             outputlist = [None]
+            # TODO: microbatch to tensor so that we can use scatter
             dist.scatter_object_list(outputlist, micro_batchs, src=0)
             n_id = nodeid[0]
             target_node = n_id[:len(
@@ -104,7 +107,7 @@ if __name__ == '__main__':
     parser.add_argument('--micro_pergpu', type=int, default=1)
     args = parser.parse_args()
     dataset = Reddit('/data/Reddit')
-    world_size = args.gpu_num  # torch.cuda.device_count()
+    world_size = args.gpu_num
 
     data = dataset[0]
     csr_topo = quiver.CSRTopo(data.edge_index)
