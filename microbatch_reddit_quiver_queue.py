@@ -59,11 +59,12 @@ def get_run_config():
 def run_sample(worker_id, run_config, dataset, quiver_sampler, micro_queues):
     num_worker = run_config['num_sample_worker']
     per_gpu = run_config['micro_pergpu']
-    torch.cuda.set_device(worker_id)
-    print('[Sample Worker {:d}/{:d}] Started with PID {:d}'.format(
-        worker_id, num_worker, os.getpid()))
-    data = dataset[0]
+    ctx = run_config['sample_workers'][worker_id]
 
+    print('[Sample Worker {:d}/{:d}] Started with PID {:d}({:s})'.format(
+        worker_id, num_worker, os.getpid(), torch.cuda.get_device_name(ctx)))
+    data = dataset[0]
+    torch.cuda.set_device(ctx)
     train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
 
     train_loader = torch.utils.data.DataLoader(
@@ -85,38 +86,42 @@ def run_sample(worker_id, run_config, dataset, quiver_sampler, micro_queues):
 
 
 def run_train(worker_id, run_config, x,  dataset, queue):
-    data = dataset[0]
+    ctx = run_config['train_workers'][worker_id]
     num_worker = run_config['num_train_worker']
+
     if num_worker > 1:
         dist_init_method = 'tcp://{master_ip}:{master_port}'.format(
             master_ip='127.0.0.1', master_port='12345')
-
         torch.distributed.init_process_group(backend="nccl",
                                              init_method=dist_init_method,
                                              world_size=num_worker,
                                              rank=worker_id)
+    train_device = torch.device(ctx)
+    torch.cuda.set_device(train_device)
 
-    torch.cuda.set_device(worker_id)
-    print('[Sample Worker {:d}/{:d}] Started with PID {:d}'.format(
-        worker_id, num_worker, os.getpid()))
+    print('[Train Worker {:d}/{:d}] Started with PID {:d}({:s})'.format(
+        worker_id, num_worker, os.getpid(), torch.cuda.get_device_name(ctx)))
+
+    data = dataset[0]
     train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
 
     train_loader = torch.utils.data.DataLoader(
         train_idx, batch_size=1024*num_worker, shuffle=False, drop_last=True)
 
-    if worker_id == 1:
+    if worker_id == 0:
         subgraph_loader = NeighborSampler(data.edge_index, node_idx=None,
                                           sizes=[-1], batch_size=2048,
                                           shuffle=False, num_workers=6)
     num_features, num_classes = dataset.num_features, dataset.num_classes
     torch.manual_seed(12345)
     model = SAGE(num_features, run_config['num_hidden'], num_classes).to(
-        worker_id)
+        train_device)
     if num_worker > 1:
-        model = DistributedDataParallel(model, device_ids=[worker_id])
+        model = DistributedDataParallel(
+            model, device_ids=[train_device], output_device=train_device)
     optimizer = torch.optim.Adam(model.parameters(), lr=run_config['lr'])
 
-    y = data.y.to(worker_id)
+    y = data.y.to(train_device)
 
     for epoch in range(1, run_config['num_epoch']):
         model.train()
@@ -128,7 +133,7 @@ def run_train(worker_id, run_config, x,  dataset, queue):
                 seeds)][worker_id * (len(seeds)//num_worker): (worker_id+1)*(len(seeds)//num_worker)]
             for i in range(len(micro_batchs)):
                 micro_batch = micro_batchs[i]
-                micro_batch_adjs = [adj.to(worker_id)
+                micro_batch_adjs = [adj.to(train_device)
                                     for adj in micro_batch.adjs]  # load topo
                 out = model(x[n_id][micro_batch.n_id],
                             micro_batch_adjs)  # forward
@@ -137,8 +142,6 @@ def run_train(worker_id, run_config, x,  dataset, queue):
                 loss.backward()
             optimizer.step()
 
-        # dist.barrier()
-
         if worker_id == 0:
             print(
                 f'Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {default_timer() - epoch_start}')
@@ -146,16 +149,12 @@ def run_train(worker_id, run_config, x,  dataset, queue):
         if worker_id == 0 and epoch % 5 == 0:  # We evaluate on a single GPU for now
             model.eval()
             with torch.no_grad():
-                out = model.module.inference(x, worker_id, subgraph_loader)
+                out = model.inference(x, worker_id, subgraph_loader)
             res = out.argmax(dim=-1) == y
             acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
             acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
             acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
             print(f'Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}')
-
-        # dist.barrier()
-
-    # dist.destroy_process_group()
 
 
 if __name__ == '__main__':
