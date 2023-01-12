@@ -4,8 +4,11 @@ from enum import Enum
 
 
 class RunMode(Enum):
-    NORMAL = 0  
+    NORMAL = 0
 
+
+def gpu(device_id=0):
+    return 'cuda:{:}'.format(device_id)
 
 
 def get_default_common_config(run_mode: RunMode = RunMode.NORMAL):
@@ -23,6 +26,7 @@ def get_default_common_config(run_mode: RunMode = RunMode.NORMAL):
 def add_common_arguments(argparser, run_config):
     run_mode = run_config['_run_mode']
 
+
 def print_run_config(run_config):
     print('config:eval_tsp="{:}"'.format(time.strftime(
         "%Y-%m-%d %H:%M:%S", time.localtime())))
@@ -33,3 +37,10 @@ def print_run_config(run_config):
     for k, v in run_config.items():
         if k.startswith('_'):
             print('config:{:}={:}'.format(k, v))
+
+
+def process_common_config(run_config):
+    run_config['train_workers'] = [
+        gpu(i) for i in range(run_config['num_train_worker'])]
+    run_config['sample_workers'] = [gpu(
+        run_config['num_train_worker'] + i) for i in range(run_config['num_sample_worker'])]

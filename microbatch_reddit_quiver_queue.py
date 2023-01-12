@@ -3,8 +3,6 @@ sample : quiver
 dataset: reddit
 getmicrobatch : yes
 '''
-
-
 import argparse
 import os
 
@@ -35,7 +33,6 @@ def parse_args(default_run_config):
                            default=default_run_config['lr'])
     argparser.add_argument('--dropout', type=float,
                            default=default_run_config['dropout'])
-    argparser.add_argument('--gpu_num', type=int, default=2)
     argparser.add_argument('--micro_pergpu', type=int, default=1)
     return vars(argparser.parse_args())
 
@@ -50,6 +47,7 @@ def get_run_config():
 
     run_config.update(parse_args(run_config))
 
+    process_common_config(run_config)
     run_config['num_fanout'] = run_config['num_layer'] = len(
         run_config['fanout'])
 
@@ -58,8 +56,9 @@ def get_run_config():
     return run_config
 
 
-def run_sample(worker_id, run_config,  dataset):
+def run_sample(worker_id, run_config, dataset, quiver_sampler, micro_queues):
     num_worker = run_config['num_sample_worker']
+    per_gpu = run_config['micro_pergpu']
     torch.cuda.set_device(worker_id)
     print('[Sample Worker {:d}/{:d}] Started with PID {:d}'.format(
         worker_id, num_worker, os.getpid()))
@@ -68,7 +67,7 @@ def run_sample(worker_id, run_config,  dataset):
     train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
 
     train_loader = torch.utils.data.DataLoader(
-        train_idx, batch_size=1024*run_config[num_train_workers], shuffle=False, drop_last=True)
+        train_idx, batch_size=1024*run_config['num_train_worker'], shuffle=False, drop_last=True)
 
     torch.manual_seed(12345)
 
@@ -78,72 +77,58 @@ def run_sample(worker_id, run_config,  dataset):
             n_id, batch_size, adjs = quiver_sampler.sample(seeds)
             micro_batchs = get_micro_batch(adjs,
                                            n_id,
-                                           batch_size, run_config['num_train_worker']*run_config['micro_pergpu'])
-            micro_batchs = [
-                micro_batchs[i * run_config['micro_pergpu']:(i+1) * run_config['micro_pergpu']] for i in range(world_size)]
-            nodeid = [n_id]
+                                           batch_size, run_config['num_train_worker']*per_gpu)
+            for i in range(run_config['num_train_worker']):
+                micro_queues[i].put(
+                    (n_id, micro_batchs[i * per_gpu:(i+1) * per_gpu]))
+        epoch_end = default_timer()
 
 
-def run_train(worker_id, run_config, x, quiver_sampler, dataset):
+def run_train(worker_id, run_config, x,  dataset, queue):
     data = dataset[0]
-    edge_index = data.edge_index
     num_worker = run_config['num_train_worker']
     if num_worker > 1:
         dist_init_method = 'tcp://{master_ip}:{master_port}'.format(
             master_ip='127.0.0.1', master_port='12345')
-        world_size = num_worker
+
         torch.distributed.init_process_group(backend="nccl",
                                              init_method=dist_init_method,
-                                             world_size=world_size,
+                                             world_size=num_worker,
                                              rank=worker_id)
 
     torch.cuda.set_device(worker_id)
-
+    print('[Sample Worker {:d}/{:d}] Started with PID {:d}'.format(
+        worker_id, num_worker, os.getpid()))
     train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
 
     train_loader = torch.utils.data.DataLoader(
-        train_idx, batch_size=1024*world_size, shuffle=False, drop_last=True)
+        train_idx, batch_size=1024*num_worker, shuffle=False, drop_last=True)
 
     if worker_id == 1:
         subgraph_loader = NeighborSampler(data.edge_index, node_idx=None,
                                           sizes=[-1], batch_size=2048,
                                           shuffle=False, num_workers=6)
-
+    num_features, num_classes = dataset.num_features, dataset.num_classes
     torch.manual_seed(12345)
-    model = SAGE(dataset.num_features, 256, dataset.num_classes).to(rank)
-    model = DistributedDataParallel(model, device_ids=[rank])
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    model = SAGE(num_features, run_config['num_hidden'], num_classes).to(
+        worker_id)
+    if num_worker > 1:
+        model = DistributedDataParallel(model, device_ids=[worker_id])
+    optimizer = torch.optim.Adam(model.parameters(), lr=run_config['lr'])
 
-    y = data.y.to(rank)
+    y = data.y.to(worker_id)
 
-    for epoch in range(1, 16):
+    for epoch in range(1, run_config['num_epoch']):
         model.train()
         epoch_start = default_timer()
         for seeds in train_loader:
             optimizer.zero_grad()
-            if rank == 0:
-                n_id, batch_size, adjs = quiver_sampler.sample(seeds)
-                micro_batchs = get_micro_batch(adjs,
-                                               n_id,
-                                               batch_size, world_size*run_config['micro_pergpu'])
-                micro_batchs = [
-                    micro_batchs[i * run_config['micro_pergpu']:(i+1) * run_config['micro_pergpu']] for i in range(world_size)]
-                # because we don't know n_id length, so we use list
-                nodeid = [n_id]
-            else:
-                micro_batchs = []
-                nodeid = [None]
-            dist.broadcast_object_list(
-                nodeid, src=0, device=torch.device(rank))
-            outputlist = [None]
-            # TODO: microbatch to tensor so that we can use scatter
-            dist.scatter_object_list(outputlist, micro_batchs, src=0)
-            n_id = nodeid[0]
+            (n_id, micro_batchs) = queue.get()
             target_node = n_id[:len(
-                seeds)][rank * (len(seeds)//world_size): (rank+1)*(len(seeds)//world_size)]
-            for i in range(len(outputlist[0])):
-                micro_batch = outputlist[0][i]
-                micro_batch_adjs = [adj.to(rank)
+                seeds)][worker_id * (len(seeds)//num_worker): (worker_id+1)*(len(seeds)//num_worker)]
+            for i in range(len(micro_batchs)):
+                micro_batch = micro_batchs[i]
+                micro_batch_adjs = [adj.to(worker_id)
                                     for adj in micro_batch.adjs]  # load topo
                 out = model(x[n_id][micro_batch.n_id],
                             micro_batch_adjs)  # forward
@@ -152,25 +137,25 @@ def run_train(worker_id, run_config, x, quiver_sampler, dataset):
                 loss.backward()
             optimizer.step()
 
-        dist.barrier()
+        # dist.barrier()
 
-        if rank == 0:
+        if worker_id == 0:
             print(
                 f'Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {default_timer() - epoch_start}')
 
-        if rank == 0 and epoch % 5 == 0:  # We evaluate on a single GPU for now
+        if worker_id == 0 and epoch % 5 == 0:  # We evaluate on a single GPU for now
             model.eval()
             with torch.no_grad():
-                out = model.module.inference(x, rank, subgraph_loader)
+                out = model.module.inference(x, worker_id, subgraph_loader)
             res = out.argmax(dim=-1) == y
             acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
             acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
             acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
             print(f'Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}')
 
-        dist.barrier()
+        # dist.barrier()
 
-    dist.destroy_process_group()
+    # dist.destroy_process_group()
 
 
 if __name__ == '__main__':
@@ -191,17 +176,17 @@ if __name__ == '__main__':
 
     workers = []
     mp.set_start_method('spawn')
-
+    microbatchs_qs = [mp.Queue(10) for i in range(num_train_workers)]
     for worker_id in range(num_sample_worker):
         p = mp.Process(target=run_sample, args=(
-            worker_id, run_config,    dataset))
+            worker_id, run_config, dataset, quiver_sampler, microbatchs_qs))
+        p.start()
+        workers.append(p)
+    for worker_id in range(num_train_workers):
+        p = mp.Process(target=run_train, args=(
+            worker_id, run_config, quiver_feature, dataset, microbatchs_qs[worker_id]))
         p.start()
         workers.append(p)
 
-    for worker_id in range(num_train_workers):
-        p = mp.Process(target=run_train, args=(
-            worker_id, run_config, quiver_feature, quiver_sampler, dataset))
-        p.start()
-        workers.append(p)
     for p in workers:
         p.join()
