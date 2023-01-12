@@ -1,3 +1,9 @@
+'''
+sample : quiver 
+dataset: reddit
+getmicrobatch : yes
+'''
+
 import argparse
 import os
 

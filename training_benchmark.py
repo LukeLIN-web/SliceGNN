@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 from utils import emit_itt, get_dataset, get_model
-from utils.microbatch_reddit_quiver_gloo import SAGE
+from gnnproject.microbatch_reddit_quiver_gloo import SAGE
 from torch_geometric.loader import NeighborLoader
 from torch_geometric.nn import PNAConv
 from torch_geometric.profile import rename_profile_file, timeit, torch_profile

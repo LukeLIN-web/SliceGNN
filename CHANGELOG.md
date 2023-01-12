@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 - Import benchmark utils.py
 - Implement get micro batch, slicing mini batch function 
 ### Changed
+- Change minibatch_reddit_quiver_origin.py to Process start instead of directly spawn
 - Fixed mini-batching with empty lists as attributes 
 - refactor model at utils/model.py   ([37f923805c3])
 ### Removed
