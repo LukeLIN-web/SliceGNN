@@ -181,6 +181,7 @@ if __name__ == '__main__':
             worker_id, run_config, dataset, quiver_sampler, microbatchs_qs))
         p.start()
         workers.append(p)
+        
     for worker_id in range(num_train_workers):
         p = mp.Process(target=run_train, args=(
             worker_id, run_config, quiver_feature, dataset, microbatchs_qs[worker_id]))
