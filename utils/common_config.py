@@ -25,6 +25,10 @@ def get_default_common_config(run_mode: RunMode = RunMode.NORMAL):
 
 def add_common_arguments(argparser, run_config):
     run_mode = run_config['_run_mode']
+    argparser.add_argument('--num-train-worker', type=int,
+                           default=run_config['num_train_worker'])
+    argparser.add_argument('--num-sample-worker', type=int,
+                           default=run_config['num_sample_worker'])
 
 
 def print_run_config(run_config):

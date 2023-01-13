@@ -149,7 +149,10 @@ def run_train(worker_id, run_config, x,  dataset, queue):
         if worker_id == 0 and epoch % 5 == 0:  # We evaluate on a single GPU for now
             model.eval()
             with torch.no_grad():
-                out = model.inference(x, worker_id, subgraph_loader)
+                if num_worker > 1:
+                    out = model.module.inference(x, worker_id, subgraph_loader)
+                else:
+                    out = model.inference(x, worker_id, subgraph_loader)
             res = out.argmax(dim=-1) == y
             acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
             acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
@@ -181,7 +184,7 @@ if __name__ == '__main__':
             worker_id, run_config, dataset, quiver_sampler, microbatchs_qs))
         p.start()
         workers.append(p)
-        
+
     for worker_id in range(num_train_workers):
         p = mp.Process(target=run_train, args=(
             worker_id, run_config, quiver_feature, dataset, microbatchs_qs[worker_id]))
