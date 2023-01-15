@@ -33,7 +33,7 @@ def parse_args(default_run_config):
                            default=default_run_config['lr'])
     argparser.add_argument('--dropout', type=float,
                            default=default_run_config['dropout'])
-    argparser.add_argument('--micro_pergpu', type=int, default=1)
+    argparser.add_argument('--micro-pergpu', type=int, default=1)
     return vars(argparser.parse_args())
 
 
@@ -104,9 +104,10 @@ def run_train(worker_id, run_config, x,  dataset, queue):
 
     data = dataset[0]
     train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
-
-    train_loader = torch.utils.data.DataLoader(
-        train_idx, batch_size=1024*num_worker, shuffle=False, drop_last=True)
+    batch_size = run_config['batch_size']*num_worker
+    length = train_idx.size(dim=0) // (1024*num_worker)
+    # train_loader = torch.utils.data.DataLoader(
+    #     train_idx, batch_size=1024*num_worker, shuffle=False, drop_last=True)
 
     if worker_id == 0:
         subgraph_loader = NeighborSampler(data.edge_index, node_idx=None,
@@ -126,11 +127,12 @@ def run_train(worker_id, run_config, x,  dataset, queue):
     for epoch in range(1, run_config['num_epoch']):
         model.train()
         epoch_start = default_timer()
-        for seeds in train_loader:
+        # for seeds in train_loader:
+        for i in range(length):
             optimizer.zero_grad()
             (n_id, micro_batchs) = queue.get()
-            target_node = n_id[:len(
-                seeds)][worker_id * (len(seeds)//num_worker): (worker_id+1)*(len(seeds)//num_worker)]
+            target_node = n_id[:batch_size][worker_id *
+                                            run_config['batch_size']: (worker_id+1)*run_config['batch_size']]
             for i in range(len(micro_batchs)):
                 micro_batch = micro_batchs[i]
                 micro_batch_adjs = [adj.to(train_device)
