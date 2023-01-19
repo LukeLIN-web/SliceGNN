@@ -83,6 +83,9 @@ def run_sample(worker_id, run_config, dataset, quiver_sampler, micro_queues):
                 micro_queues[i].put(
                     (n_id, micro_batchs[i * per_gpu:(i+1) * per_gpu]))
         epoch_end = default_timer()
+        # for i in range(run_config['num_train_worker']):
+            # print(micro_queues[i].qsize()) 
+        print(f'Epoch: {epoch:03d}, Sample Epoch Time: {epoch_end - epoch_start}')
 
 
 def run_train(worker_id, run_config, x,  dataset, queue):
@@ -106,8 +109,6 @@ def run_train(worker_id, run_config, x,  dataset, queue):
     train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
     batch_size = run_config['batch_size']*num_worker
     length = train_idx.size(dim=0) // (1024*num_worker)
-    # train_loader = torch.utils.data.DataLoader(
-    #     train_idx, batch_size=1024*num_worker, shuffle=False, drop_last=True)
 
     if worker_id == 0:
         subgraph_loader = NeighborSampler(data.edge_index, node_idx=None,
@@ -127,7 +128,6 @@ def run_train(worker_id, run_config, x,  dataset, queue):
     for epoch in range(1, run_config['num_epoch']):
         model.train()
         epoch_start = default_timer()
-        # for seeds in train_loader:
         for i in range(length):
             optimizer.zero_grad()
             (n_id, micro_batchs) = queue.get()
@@ -143,10 +143,12 @@ def run_train(worker_id, run_config, x,  dataset, queue):
                     out, y[target_node][i * (micro_batch.size):(i+1) * (micro_batch.size)])
                 loss.backward()
             optimizer.step()
+        epoch_end = default_timer()
+        # print(queue.qsize())
 
         if worker_id == 0:
             print(
-                f'Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {default_timer() - epoch_start}')
+                f'Epoch: {epoch:03d}, Loss: {loss:.4f}, Train Epoch Time: {epoch_end - epoch_start}')
 
         if worker_id == 0 and epoch % 5 == 0:  # We evaluate on a single GPU for now
             model.eval()
@@ -180,7 +182,7 @@ if __name__ == '__main__':
 
     workers = []
     mp.set_start_method('spawn')
-    microbatchs_qs = [mp.Queue(10) for i in range(num_train_workers)]
+    microbatchs_qs = [mp.Queue(30) for i in range(num_train_workers)]
     for worker_id in range(num_sample_worker):
         p = mp.Process(target=run_sample, args=(
             worker_id, run_config, dataset, quiver_sampler, microbatchs_qs))

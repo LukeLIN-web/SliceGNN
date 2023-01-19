@@ -178,7 +178,7 @@ def run_train(worker_id, run_config, x, quiver_sampler, dataset):
 
     torch.cuda.set_device(worker_id)
 
-    train_mask, val_mask, test_mask =  data.train_mask, data.val_mask, data.test_mask
+    train_mask, val_mask, test_mask = data.train_mask, data.val_mask, data.test_mask
     train_idx = train_mask.nonzero(as_tuple=False).view(-1)
     train_idx = train_idx.split(train_idx.size(0) // world_size)[worker_id]
 
@@ -192,7 +192,8 @@ def run_train(worker_id, run_config, x, quiver_sampler, dataset):
     num_features, num_classes = dataset.num_features, dataset.num_classes
 
     torch.manual_seed(12345)
-    model = SAGE(num_features, run_config['num_hidden'], num_classes).to(worker_id)
+    model = SAGE(num_features, run_config['num_hidden'], num_classes).to(
+        worker_id)
     model = DistributedDataParallel(model, device_ids=[worker_id])
     optimizer = torch.optim.Adam(model.parameters(), lr=run_config['lr'])
     rank = worker_id
@@ -233,7 +234,6 @@ def run_train(worker_id, run_config, x, quiver_sampler, dataset):
 
 if __name__ == '__main__':
     dataset = Reddit('/data/Reddit')
-    # world_size = 2  # torch.cuda.device_count()
     run_config = get_run_config()
     num_train_workers = run_config['num_train_worker']
 
@@ -250,7 +250,7 @@ if __name__ == '__main__':
         num_train_workers)), device_cache_size="2G", cache_policy="device_replicate", csr_topo=csr_topo)
 
     quiver_feature.from_cpu_tensor(data.x)
-    
+
     # origin
     # mp.spawn(
     #     run,
