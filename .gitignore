@@ -2,3 +2,4 @@ logs/
 __pycache__/
 sampler/__pycache__/
 tests/
+outputs/

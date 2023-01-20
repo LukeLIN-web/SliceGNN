@@ -1,0 +1,4 @@
+defaults:
+  - dataset: reddit
+  - model: sage
+root: '/tmp/datasets'
