@@ -8,6 +8,8 @@ from torch_geometric.utils import k_hop_subgraph, subgraph
 from torch_geometric.utils.num_nodes import maybe_num_nodes
 import torch.nn.functional as F
 import torch
+from .common_class import Adj, Microbatch
+
 torch.set_printoptions(profile="full")
 
 
@@ -31,28 +33,6 @@ class SAGE(torch.nn.Module):
             if i != self.num_layers - 1:
                 x = F.relu(x)
         return x
-
-
-class Adj(NamedTuple):
-    edge_index: torch.Tensor
-    e_id: torch.Tensor
-    size: Tuple[int, int]
-
-    def to(self, *args, **kwargs):
-        e_id = self.e_id.to(*args, **kwargs) if self.e_id is not None else None
-        return Adj(self.edge_index.to(*args, **kwargs),
-                   e_id, self.size)
-
-
-class Microbatch(NamedTuple):
-    n_id: torch.Tensor
-    size: int
-    adjs : List[Adj]
-
-    def to(self, *args, **kwargs):
-        n_id = self.n_id.to(*args, **kwargs) if self.n_id is not None else None
-        return Microbatch(self.n_id.to(*args, **kwargs),
-                   self.adjs.to(*args, **kwargs), self.size)
 
 
 def slice_adj(
@@ -135,7 +115,7 @@ def slice_adj(
 
 
 def get_micro_batch(
-    adjs : List[Adj],
+    adjs: List[Adj],
     n_id: Tensor,
     batch_size: int,
     num_micro_batch: int = 2,
@@ -154,7 +134,7 @@ def get_micro_batch(
         return [batch_size, n_id, adjs]
     mod = batch_size % num_micro_batch
     if mod != 0:
-        batch_size  -=  mod
+        batch_size -= mod
     assert batch_size % num_micro_batch == 0
     adjs.reverse()
     micro_batch_size = batch_size // num_micro_batch     # TODO: or padding last batch

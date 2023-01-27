@@ -11,7 +11,6 @@ from omegaconf import OmegaConf
 import torch
 import torch.nn.functional as F
 import torch.multiprocessing as mp
-import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel
 
 from torch_geometric.datasets import Reddit
