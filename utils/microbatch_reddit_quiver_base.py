@@ -23,8 +23,7 @@ from get_micro_batch import *
 from model import SAGE
 
 
-
-def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, dataset,args):
+def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, dataset, args):
 
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '12355'
@@ -33,7 +32,6 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, 
     torch.cuda.set_device(rank)
 
     train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
-    # train_idx = train_idx.split(train_idx.size(0) // world_size)[rank]
 
     train_loader = torch.utils.data.DataLoader(
         train_idx, batch_size=1024, shuffle=False, drop_last=True)
@@ -55,12 +53,13 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, 
         epoch_start = default_timer()
         for seeds in train_loader:
             optimizer.zero_grad()
-            microseeds = seeds[rank * seeds.size(0) // world_size: (rank + 1) * seeds.size(0) // world_size]
+            microseeds = seeds[rank * seeds.size(0) // world_size: (
+                rank + 1) * seeds.size(0) // world_size]
             n_id, batch_size, adjs = quiver_sampler.sample(microseeds)
             target_node = n_id[:len(seeds)]
             micro_batch_adjs = [adj.to(rank)
-                                    for adj in adjs]  # load topo
-            out = model(x[n_id],micro_batch_adjs)  # forward
+                                for adj in adjs]  # load topo
+            out = model(x[n_id], micro_batch_adjs)  # forward
             loss = F.nll_loss(out, y[target_node][:batch_size])
             loss.backward()
             optimizer.step()
@@ -99,7 +98,7 @@ if __name__ == '__main__':
 
     quiver_sampler = quiver.pyg.GraphSageSampler(
         csr_topo, sizes=[25, 10], device=0, mode='GPU')  # 这里是0, 但是spawn之后会变成fake,然后再lazy init 赋值
-    # cache feature 到rank0
+
     quiver_feature = quiver.Feature(rank=0, device_list=list(range(
         world_size)), device_cache_size="2G", cache_policy="device_replicate", csr_topo=csr_topo)
     quiver_feature.from_cpu_tensor(data.x)
@@ -108,7 +107,7 @@ if __name__ == '__main__':
     mp.spawn(
         run,
         args=(world_size, data, quiver_feature,
-              quiver_sampler, dataset,args),
+              quiver_sampler, dataset, args),
         nprocs=world_size,
         join=True
     )
