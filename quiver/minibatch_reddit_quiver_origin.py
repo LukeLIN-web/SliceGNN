@@ -24,6 +24,7 @@ import quiver
 import argparse
 from utils.model import SAGE
 
+
 def parse_args(default_run_config):
     argparser = argparse.ArgumentParser("GCN Training")
 
@@ -55,8 +56,6 @@ def get_run_config():
     print_run_config(run_config)
 
     return run_config
-
-
 
 
 def run(rank, world_size, data_split, edge_index, x, quiver_sampler: quiver.pyg.GraphSageSampler, y, num_features, num_classes):

@@ -34,8 +34,9 @@ def test_overlap():
             print(micro_batchs[i+1].n_id)
             print(n_id[micro_batchs[i].n_id])
             print(n_id[micro_batchs[i+1].n_id])
-            similarity = calu_similarity(n_id[micro_batchs[i].n_id], n_id[micro_batchs[i+1].n_id])
-            print(similarity)
+            similarity1 = calu_similarity1(n_id[micro_batchs[i].n_id], n_id[micro_batchs[i+1].n_id])
+            similarity2 = calu_similarity2(n_id[micro_batchs[i].n_id], n_id[micro_batchs[i+1].n_id])
+            print(similarity1, similarity2)
 
 def test_get_micro_batch():
     # three hop
