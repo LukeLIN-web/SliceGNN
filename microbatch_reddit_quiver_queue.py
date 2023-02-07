@@ -29,12 +29,12 @@ def run_sample(worker_id, params, dataset, quiver_sampler, micro_queues):
 
     num_sample_worker = params.num_sample_worker
     per_gpu = params.micro_pergpu
-    ctx = sample_workers[worker_id]
+    # ctx = sample_workers[worker_id]
     num_train_worker = params.num_train_worker
-    print('[Sample Worker {:d}/{:d}] Started with PID {:d}({:s})'.format(
-        worker_id, num_sample_worker, os.getpid(), torch.cuda.get_device_name(ctx)))
+    # print('[Sample Worker {:d}/{:d}] Started with PID {:d}({:s})'.format(
+    #     worker_id, num_sample_worker, os.getpid(), torch.cuda.get_device_name(ctx)))
     data = dataset[0]
-    torch.cuda.set_device(ctx)
+    # torch.cuda.set_device(ctx)
     train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
 
     train_loader = torch.utils.data.DataLoader(
@@ -49,12 +49,27 @@ def run_sample(worker_id, params, dataset, quiver_sampler, micro_queues):
             micro_batchs = get_micro_batch(adjs,
                                            n_id,
                                            batch_size, num_train_worker*per_gpu)
-            for i in range(num_train_worker):
-                micro_queues[i].put(
-                    (n_id, micro_batchs[i * per_gpu:(i+1) * per_gpu]))
-        epoch_end = default_timer()
-        print(
-            f'Epoch: {epoch:03d}, Sample Epoch Time: {epoch_end - epoch_start}')
+            import utils.calu_similarity as sim
+            import logging
+            import itertools
+            max_sum_similiarity = 0
+            print(len(itertools.permutations(micro_batchs)))
+            for perm in itertools.permutations(micro_batchs):
+                sum_similiarity = 0
+                for i in range(len(perm)):
+                    for j in range(i+1, len(perm)):
+                        sum_similiarity += sim.Ochiai(
+                            perm[i].n_id, perm[j].n_id)
+                if sum_similiarity > max_sum_similiarity:
+                    max_sum_similiarity = sum_similiarity
+            print(max_sum_similiarity)
+
+        #     for i in range(num_train_worker):
+        #         micro_queues[i].put(
+        #             (n_id, micro_batchs[i * per_gpu:(i+1) * per_gpu]))
+        # epoch_end = default_timer()
+        # print(
+        #     f'Epoch: {epoch:03d}, Sample Epoch Time: {epoch_end - epoch_start}')
 
 
 def run_train(worker_id, params, x,  dataset, queue):
@@ -150,9 +165,9 @@ def main(conf):
     quiver_sampler = quiver.pyg.GraphSageSampler(
         csr_topo, sizes=[25, 10], device=0, mode='GPU')  # 这里是0, 但是spawn之后会变成fake,然后再lazy init 赋值
 
-    quiver_feature = quiver.Feature(rank=0, device_list=list(range(
-        num_train_workers)), device_cache_size="2G", cache_policy="device_replicate", csr_topo=csr_topo)
-    quiver_feature.from_cpu_tensor(data.x)
+    # quiver_feature = quiver.Feature(rank=0, device_list=list(range(
+    #     num_train_workers)), device_cache_size="2G", cache_policy="device_replicate", csr_topo=csr_topo)
+    # quiver_feature.from_cpu_tensor(data.x)
 
     workers = []
     mp.set_start_method('spawn')
@@ -163,11 +178,11 @@ def main(conf):
         p.start()
         workers.append(p)
 
-    for worker_id in range(num_train_workers):
-        p = mp.Process(target=run_train, args=(
-            worker_id, params, quiver_feature, dataset, microbatchs_qs[worker_id]))
-        p.start()
-        workers.append(p)
+    # for worker_id in range(num_train_workers):
+    #     p = mp.Process(target=run_train, args=(
+    #         worker_id, params, quiver_feature, dataset, microbatchs_qs[worker_id]))
+    #     p.start()
+    #     workers.append(p)
 
     for p in workers:
         p.join()

@@ -12,6 +12,7 @@ x = Tensor([[1, 2], [2, 3], [3, 3], [4, 3], [5, 3],
             [6, 3], [7, 3], [8, 3], [9, 3], [10, 3]])
 num_features, hidden_size, num_classes = 2, 16, 1
 
+
 def test_overlap():
     train_loader = NeighborSampler(edge_index,
                                    sizes=[-1], batch_size=6,
@@ -29,14 +30,17 @@ def test_overlap():
         micro_batchs = get_micro_batch(adjs,
                                        n_id,
                                        batch_size, num_micro_batch)
-        for i in range(num_micro_batch -1):
+        for i in range(num_micro_batch - 1):
             print(micro_batchs[i].n_id)
             print(micro_batchs[i+1].n_id)
             print(n_id[micro_batchs[i].n_id])
             print(n_id[micro_batchs[i+1].n_id])
-            similarity1 = calu_similarity1(n_id[micro_batchs[i].n_id], n_id[micro_batchs[i+1].n_id])
-            similarity2 = calu_similarity2(n_id[micro_batchs[i].n_id], n_id[micro_batchs[i+1].n_id])
+            similarity1 = Jaccard(
+                n_id[micro_batchs[i].n_id], n_id[micro_batchs[i+1].n_id])
+            similarity2 = Ochiai(
+                n_id[micro_batchs[i].n_id], n_id[micro_batchs[i+1].n_id])
             print(similarity1, similarity2)
+
 
 def test_get_micro_batch():
     # three hop
