@@ -21,13 +21,16 @@ from timeit import default_timer
 from utils.get_micro_batch import get_micro_batch
 from utils.model import SAGE
 from utils.common_config import gpu
+import logging
+# A logger for this file
+log = logging.getLogger(__name__)
 
 
 def run_sample(worker_id, params, dataset, quiver_sampler, micro_queues):
-    sample_workers = [gpu(params.num_train_worker + i)
-                      for i in range(params.num_sample_worker)]
+    # sample_workers = [gpu(params.num_train_worker + i)
+    #                   for i in range(params.num_sample_worker)]
 
-    num_sample_worker = params.num_sample_worker
+    # num_sample_worker = params.num_sample_worker
     per_gpu = params.micro_pergpu
     # ctx = sample_workers[worker_id]
     num_train_worker = params.num_train_worker
@@ -42,9 +45,12 @@ def run_sample(worker_id, params, dataset, quiver_sampler, micro_queues):
 
     torch.manual_seed(12345)
 
-    for epoch in range(1, params.num_epoch+1):
-        epoch_start = default_timer()
-        for seeds in train_loader:
+    # for epoch in range(1, params.num_epoch+1):
+    #     epoch_start = default_timer()
+    #     for seeds in train_loader:
+    if True:
+        if True:
+            seeds = next(iter(train_loader))
             n_id, batch_size, adjs = quiver_sampler.sample(seeds)
             micro_batchs = get_micro_batch(adjs,
                                            n_id,
@@ -53,15 +59,17 @@ def run_sample(worker_id, params, dataset, quiver_sampler, micro_queues):
             import logging
             import itertools
             max_sum_similiarity = 0
-            print(len(itertools.permutations(micro_batchs)))
-            for perm in itertools.permutations(micro_batchs):
-                sum_similiarity = 0
-                for i in range(len(perm)):
-                    for j in range(i+1, len(perm)):
-                        sum_similiarity += sim.Ochiai(
-                            perm[i].n_id, perm[j].n_id)
-                if sum_similiarity > max_sum_similiarity:
-                    max_sum_similiarity = sum_similiarity
+            for i in range(len(micro_batchs)-1):
+                max_sum_similiarity += sim.Ochiai(
+                    micro_batchs[i].n_id, micro_batchs[i+1].n_id)
+            
+            # for perm in itertools.permutations(micro_batchs):
+            #     sum_similiarity = 0
+            #     for i in range(len(perm)-1):
+            #         sum_similiarity += sim.Ochiai(
+            #             perm[i].n_id, perm[i+1].n_id)
+            #     if sum_similiarity > max_sum_similiarity:
+            #         max_sum_similiarity = sum_similiarity
             print(max_sum_similiarity)
 
         #     for i in range(num_train_worker):
