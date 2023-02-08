@@ -62,7 +62,7 @@ def run_sample(worker_id, params, dataset, quiver_sampler, micro_queues):
             for i in range(len(micro_batchs)-1):
                 max_sum_similiarity += sim.Ochiai(
                     micro_batchs[i].n_id, micro_batchs[i+1].n_id)
-            
+
             # for perm in itertools.permutations(micro_batchs):
             #     sum_similiarity = 0
             #     for i in range(len(perm)-1):

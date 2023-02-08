@@ -5,3 +5,13 @@ tests/
 outputs/
 profilelogs/
 *.svg
+_ext/
+build/
+dist/
+.cache/
+data/
+.eggs/
+*.egg-info/
+.coverage
+*.pt
+*.so
