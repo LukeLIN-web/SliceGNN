@@ -2,8 +2,8 @@ from torch import Tensor
 from typing import List
 from torch_geometric.loader import NeighborSampler
 import torch
-from utils.get_micro_batch import *
-from utils.calu_similarity import *
+from microGNN.utils.get_micro_batch import *
+from microGNN.utils.calu_similarity import *
 
 # three hop
 edge_index = torch.tensor([[0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9],

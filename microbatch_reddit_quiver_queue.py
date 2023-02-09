@@ -18,9 +18,9 @@ from torch_geometric.loader import NeighborSampler
 
 import quiver
 from timeit import default_timer
-from utils.get_micro_batch import get_micro_batch
-from utils.model import SAGE
-from utils.common_config import gpu
+from microGNN.utils.get_micro_batch import get_micro_batch
+from microGNN.utils.model import SAGE
+from microGNN.utils.common_config import gpu
 import logging
 # A logger for this file
 log = logging.getLogger(__name__)
@@ -55,7 +55,7 @@ def run_sample(worker_id, params, dataset, quiver_sampler, micro_queues):
             micro_batchs = get_micro_batch(adjs,
                                            n_id,
                                            batch_size, num_train_worker*per_gpu)
-            import utils.calu_similarity as sim
+            import microGNN.utils.calu_similarity as sim
             import logging
             import itertools
             max_sum_similiarity = 0
