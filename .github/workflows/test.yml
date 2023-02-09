@@ -32,5 +32,5 @@ jobs:
       - name: test
         run: |
           pip install pytest ogb
-          pytest test_getmicrobatch.py
+          pytest
       - run: echo "🍏 This job's status is ${{ job.status }}."
