@@ -14,15 +14,13 @@ import torch.multiprocessing as mp
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel
 
-from torch_geometric.nn import SAGEConv
 from torch_geometric.datasets import Reddit
 from torch_geometric.loader import NeighborSampler
-from utils.common_config import *
 
 from timeit import default_timer
 import quiver
 import argparse
-from utils.model import SAGE
+from microGNN.utils.model import SAGE
 
 
 def parse_args(default_run_config):
