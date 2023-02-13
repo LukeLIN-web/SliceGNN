@@ -95,8 +95,9 @@ def get_micro_batch(
     r"""Returns the micro batchs
 
     Args:
-        batch:  mini batch graph
-        hop: subgraph hop times
+        adjs: each layer adj
+        n_id : the node id of the batch
+        batch_size: mini batch size
         num_micro_batch: micro_batch number
 
     :rtype: List[List[Tensor,int,list]]
@@ -123,3 +124,35 @@ def get_micro_batch(
         subadjs.reverse()  # O(n)
         micro_batchs.append(Microbatch(sub_nid, micro_batch_size, subadjs))
     return micro_batchs
+
+
+def get_micro_batch_withlayer(
+    adjs: List[Adj],
+    n_id: Tensor,
+    batch_size: int,
+    num_micro_batch: int = 2,
+) -> List[List[Tensor]]:
+    r"""Returns each layer node id 
+
+    :rtype: List[ each layer node id ]
+    """
+    n_id = torch.arange(len(n_id))  # relabel for mini batch
+    if batch_size < num_micro_batch:
+        return n_id
+    mod = batch_size % num_micro_batch
+    if mod != 0:
+        batch_size -= mod
+    assert batch_size % num_micro_batch == 0
+    adjs.reverse()
+    micro_batch_size = batch_size // num_micro_batch     # TODO: or padding last batch
+    microbatchs = []
+    for i in range(num_micro_batch):
+        sub_nid = n_id[i * micro_batch_size:(i + 1) * micro_batch_size]
+        subnids = []
+        for adj in adjs:
+            sub_nid, sub_adjs, edge_mask = slice_adj(
+                sub_nid, adj.edge_index, relabel_nodes=True)
+            subnids.append(sub_nid)
+        subnids.reverse()  # O(n)
+        microbatchs.append(subnids)
+    return microbatchs
