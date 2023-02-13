@@ -1,38 +1,10 @@
-from collections import namedtuple
 from torch import Tensor
-from typing import List, NamedTuple, Optional, Tuple, Union
-from torch_geometric.nn import SAGEConv
-from torch_geometric.loader import NeighborSampler
-from torch_geometric.data import Data
-from torch_geometric.utils import k_hop_subgraph, subgraph
+from typing import List, Optional, Tuple, Union
 from torch_geometric.utils.num_nodes import maybe_num_nodes
-import torch.nn.functional as F
 import torch
 from .common_class import Adj, Microbatch
 
 torch.set_printoptions(profile="full")
-
-
-class SAGE(torch.nn.Module):
-    def __init__(self, in_channels, hidden_channels, out_channels,
-                 num_layers=2):
-        super().__init__()
-        self.num_layers = num_layers
-
-        self.convs = torch.nn.ModuleList()
-        self.convs.append(SAGEConv(in_channels, hidden_channels))
-        for _ in range(self.num_layers - 2):
-            self.convs.append(SAGEConv(hidden_channels, hidden_channels))
-        self.convs.append(SAGEConv(hidden_channels, out_channels))
-
-    def forward(self, x, adjs):
-        assert len(adjs[0]) == 3
-        for i, (edge_index, _, size) in enumerate(adjs):
-            x_target = x[:size[1]]  # Target nodes are always placed first.
-            x = self.convs[i]((x, x_target), edge_index)
-            if i != self.num_layers - 1:
-                x = F.relu(x)
-        return x
 
 
 def slice_adj(
