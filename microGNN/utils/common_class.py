@@ -1,6 +1,7 @@
-from typing import List, NamedTuple, Optional, Tuple, Union
+from typing import List, NamedTuple, Tuple
 import torch
-import itertools
+
+
 class Adj(NamedTuple):
     edge_index: torch.Tensor
     e_id: torch.Tensor
@@ -15,14 +16,9 @@ class Adj(NamedTuple):
 class Microbatch(NamedTuple):
     n_id: torch.Tensor
     size: int
-    adjs : List[Adj]
+    adjs: List[Adj]
 
     def to(self, *args, **kwargs):
         n_id = self.n_id.to(*args, **kwargs) if self.n_id is not None else None
         return Microbatch(self.n_id.to(*args, **kwargs),
-                   self.adjs.to(*args, **kwargs), self.size)
-
-def permutation(nanobatch_list: List[Microbatch]):
-    for perm in itertools.permutations(nanobatch_list):
-        yield perm
-
+                          self.adjs.to(*args, **kwargs), self.size)

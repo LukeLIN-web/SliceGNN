@@ -2,7 +2,7 @@ from torch import Tensor
 from typing import List, Optional, Tuple, Union
 from torch_geometric.utils.num_nodes import maybe_num_nodes
 import torch
-from .common_class import Adj, Microbatch
+from microGNN.utils.common_class import Adj, Microbatch
 
 torch.set_printoptions(profile="full")
 
