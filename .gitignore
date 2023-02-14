@@ -3,6 +3,7 @@ __pycache__/
 sampler/__pycache__/
 tests/
 outputs/
+multirun/
 profilelogs/
 *.svg
 _ext/

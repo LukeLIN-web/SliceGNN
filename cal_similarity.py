@@ -11,7 +11,7 @@ import torch
 from torch_geometric.datasets import Reddit
 import quiver
 from timeit import default_timer
-from microGNN.utils.get_micro_batch import get_micro_batch
+from microGNN.utils.get_micro_batch import get_micro_batch_withlayer
 from microGNN.utils.common_config import gpu
 import microGNN.utils.calu_similarity as sim
 import logging
@@ -41,43 +41,38 @@ def main(conf):
     seeds = next(iter(train_loader))
     n_id, batch_size, adjs = quiver_sampler.sample(seeds)
     per_gpu = params.micro_pergpu
-    micro_batchs = get_micro_batch(adjs,
-                                   n_id,
-                                   batch_size, num_train_worker*per_gpu)
-    print(micro_batchs[0][0].shape)
-    random = True
-    layer_max_sum_similiarity = [0, 0]
+    micro_batchs = get_micro_batch_withlayer(adjs,
+                                             n_id,
+                                             batch_size, num_train_worker*per_gpu)
+    random = False
+    layer_num = params.architecture.num_layers
+    layer_max_sum_similiarity = [0] * layer_num
     if random == True:
-        per_gpu = len(micro_batchs)//num_train_worker
-        layer_max_sum_similiarity = [0] * params.architecture.num_layers
-
         for gpu_idx in range(num_train_worker):
             start = gpu_idx * per_gpu
             end = start + per_gpu
             gpu = micro_batchs[start:end]
-
-            for layer in range(2):
+            for layer in range(layer_num):
                 for i in range(len(gpu) - 1):
                     layer_max_sum_similiarity[layer] += sim.Ochiai(
                         gpu[i][layer], gpu[i + 1][layer])
     else:
-        layer_max_sum_similiarity = [0, 0]
         for perm in itertools.permutations(micro_batchs):
-            gpu0 = perm[:per_gpu//2]
-            gpu1 = perm[per_gpu//2:per_gpu]
-            sum_similiarity = 0
-            for layer in range(2):
-                for i in range(len(gpu0)-1):
-                    max_sum_similiarity += sim.Ochiai(
-                        gpu0[i][layer], gpu0[i+1][layer])
-                for i in range(len(gpu1)-1):
-                    max_sum_similiarity += sim.Ochiai(
-                        gpu1[i][layer], gpu1[i+1][layer])
-                if sum_similiarity > layer_max_sum_similiarity[layer]:
-                    layer_max_sum_similiarity[layer] = sum_similiarity
-    for layer in range(2):
-        log.log(logging.INFO, 'layer {} max_sum_similiarity: {}'.format(
-            layer, layer_max_sum_similiarity[layer]))
+            sum_similiarity = [0] * layer_num
+            for gpu_idx in range(num_train_worker):
+                start = gpu_idx * per_gpu
+                end = start + per_gpu
+                gpu = perm[start:end]
+                for layer in range(layer_num):
+                    for i in range(len(gpu) - 1):
+                        sum_similiarity[layer] += sim.Ochiai(
+                            gpu[i][layer], gpu[i + 1][layer])
+            for layer in range(layer_num):
+                if sum_similiarity[layer] > layer_max_sum_similiarity[layer]:
+                    layer_max_sum_similiarity[layer] = sum_similiarity[layer]
+    for layer in range(layer_num):
+        log.log(logging.INFO, ',{},{},{},{},{}'.format(
+            random, num_train_worker, num_train_worker*per_gpu, layer, layer_max_sum_similiarity[layer]))
 
 
 if __name__ == '__main__':
