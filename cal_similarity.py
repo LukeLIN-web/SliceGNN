@@ -44,9 +44,14 @@ def main(conf):
     micro_batchs = get_micro_batch_withlayer(adjs,
                                              n_id,
                                              batch_size, num_train_worker*per_gpu)
+    layernode_num = [0] * params.architecture.num_layers
+    for micro_batch in micro_batchs:
+        for layer in range(params.architecture.num_layers):
+            layernode_num[layer] += len(micro_batch[layer])
     random = False
     layer_num = params.architecture.num_layers
-    layer_max_sum_similiarity = [0] * layer_num
+    max_sum_common_nodes = [0] * layer_num
+    reuse_rate = [0] * layer_num
     if random == True:
         for gpu_idx in range(num_train_worker):
             start = gpu_idx * per_gpu
@@ -54,25 +59,31 @@ def main(conf):
             gpu = micro_batchs[start:end]
             for layer in range(layer_num):
                 for i in range(len(gpu) - 1):
-                    layer_max_sum_similiarity[layer] += sim.Ochiai(
+                    max_sum_common_nodes[layer] += sim.common_nodes(
                         gpu[i][layer], gpu[i + 1][layer])
+        for layer in range(layer_num):
+            reuse_rate[layer] = max_sum_common_nodes[layer] / \
+                layernode_num[layer]
     else:
         for perm in itertools.permutations(micro_batchs):
-            sum_similiarity = [0] * layer_num
+            sum_common_nodes = [0] * layer_num
             for gpu_idx in range(num_train_worker):
                 start = gpu_idx * per_gpu
                 end = start + per_gpu
                 gpu = perm[start:end]
                 for layer in range(layer_num):
                     for i in range(len(gpu) - 1):
-                        sum_similiarity[layer] += sim.Ochiai(
+                        sum_common_nodes[layer] += sim.common_nodes(
                             gpu[i][layer], gpu[i + 1][layer])
             for layer in range(layer_num):
-                if sum_similiarity[layer] > layer_max_sum_similiarity[layer]:
-                    layer_max_sum_similiarity[layer] = sum_similiarity[layer]
+                if sum_common_nodes[layer] > max_sum_common_nodes[layer]:
+                    max_sum_common_nodes[layer] = sum_common_nodes[layer]
+        for layer in range(layer_num):
+            reuse_rate[layer] = max_sum_common_nodes[layer] / \
+                layernode_num[layer]
     for layer in range(layer_num):
         log.log(logging.INFO, ',{},{},{},{},{}'.format(
-            random, num_train_worker, num_train_worker*per_gpu, layer, layer_max_sum_similiarity[layer]))
+            random, num_train_worker, num_train_worker*per_gpu, layer, reuse_rate[layer]))
 
 
 if __name__ == '__main__':

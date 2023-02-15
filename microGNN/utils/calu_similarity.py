@@ -4,6 +4,16 @@ from torch import Tensor
 from timeit import default_timer
 
 
+def common_nodes(nid1: Tensor, nid2: Tensor) -> int:
+    """
+    calu the commonde nodes numbre of two microbatch
+    """
+    assert len(nid1) > 0 and len(nid2) > 0
+    a_cat_b, counts = torch.cat([nid1, nid2]).unique(return_counts=True)
+    intersection = a_cat_b[torch.where(counts.gt(1))]
+    return len(intersection)
+
+
 def Ochiai(nid1: Tensor, nid2: Tensor) -> float:
     """
     calu the similarity of two microbatch

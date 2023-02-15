@@ -4,8 +4,8 @@ from torch_geometric.loader import NeighborSampler
 import torch
 from microGNN.utils.get_micro_batch import *
 from microGNN.utils.calu_similarity import *
-from microGNN.utils.model import SAGE
-
+import torch.nn.functional as F
+from torch_geometric.nn import SAGEConv
 # three hop
 edge_index = torch.tensor([[0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9],
                            [1, 6, 0, 2, 6, 1, 3, 7, 2, 4, 8, 3, 5, 9, 4, 9, 0, 1, 7, 2, 6, 8, 3, 7, 9, 4, 5, 8]], dtype=torch.long)
@@ -13,6 +13,26 @@ x = Tensor([[1, 2], [2, 3], [3, 3], [4, 3], [5, 3],
             [6, 3], [7, 3], [8, 3], [9, 3], [10, 3]])
 num_features, hidden_size, num_classes = 2, 16, 1
 
+class SAGE(torch.nn.Module):
+    def __init__(self, in_channels, hidden_channels, out_channels,
+                 num_layers=2):
+        super().__init__()
+        self.num_layers = num_layers
+
+        self.convs = torch.nn.ModuleList()
+        self.convs.append(SAGEConv(in_channels, hidden_channels))
+        for _ in range(self.num_layers - 2):
+            self.convs.append(SAGEConv(hidden_channels, hidden_channels))
+        self.convs.append(SAGEConv(hidden_channels, out_channels))
+
+    def forward(self, x, adjs):
+        assert len(adjs[0]) == 3
+        for i, (edge_index, _, size) in enumerate(adjs):
+            x_target = x[:size[1]]  # Target nodes are always placed first.
+            x = self.convs[i]((x, x_target), edge_index)
+            if i != self.num_layers - 1:
+                x = F.relu(x)
+        return x
 
 def test_overlap():
     train_loader = NeighborSampler(edge_index,
@@ -41,6 +61,22 @@ def test_overlap():
             similarity2 = Ochiai(
                 n_id[micro_batchs[i].n_id], n_id[micro_batchs[i+1].n_id])
             print(similarity1, similarity2)
+
+
+def test_nodeid():
+    hop = [-1, -1, -1]# three hop
+    train_loader = NeighborSampler(edge_index,
+                                   sizes=hop, batch_size=4,
+                                   shuffle=False, num_workers=0, drop_last=True)
+    for batch_size, n_id, adjs in train_loader:
+        num_micro_batch = 1
+        micro_batchs = get_micro_batch_withlayer(adjs,
+                                                 n_id,
+                                                 batch_size, num_micro_batch)
+        for i in range(num_micro_batch):
+            print(micro_batchs[i])
+            print(len(micro_batchs))
+
 
 
 def test_get_micro_batch():
@@ -104,5 +140,6 @@ def test_get_micro_batch():
 
 
 if __name__ == '__main__':
-    # test_get_micro_batch()
-    test_overlap()
+    test_get_micro_batch()
+    # test_overlap()
+    # test_nodeid()
