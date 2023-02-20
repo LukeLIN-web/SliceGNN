@@ -1,13 +1,13 @@
 import os
-import shutil
+# import shutil
 # Set the root directory
-root_dir = './multirun/2023-02-14/'
+root_dir = './multirun/2023-02-20/'
 
 # Loop through all subdirectories and files
 log_file = './profilelogs/all_logs.csv'
 
 with open(log_file, 'w') as f:
-    f.write("-,-,random , #gpu  , nanobatch,layer, max_sum_similiarity \n")
+    f.write("-,-,random , #gpu  , nanobatch, layer, micro_reuse_rate[layer], full_reuse_rate[layer] \n")
     for subdir, dirs, files in os.walk(root_dir):
         for file in files:
             # Check if the file has a .log extension
@@ -15,4 +15,5 @@ with open(log_file, 'w') as f:
                 with open(subdir+"/"+file, 'r') as log:
                     f.write(log.read())
 
-shutil.rmtree(root_dir)
+
+# shutil.rmtree(root_dir)

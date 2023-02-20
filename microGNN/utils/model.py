@@ -1,4 +1,3 @@
-
 from torch_geometric.nn import SAGEConv
 import torch
 import torch.nn.functional as F

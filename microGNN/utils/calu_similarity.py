@@ -4,11 +4,19 @@ from torch import Tensor
 from timeit import default_timer
 
 
-def common_nodes(nid1: Tensor, nid2: Tensor) -> int:
+def common_nodes(nid1, nid2: Tensor) -> int:
     """
     calu the commonde nodes numbre of two microbatch
     """
-    assert len(nid1) > 0 and len(nid2) > 0
+    assert  len(nid2) > 0
+    if isinstance(nid1,set):
+        for nid in nid2:
+            nid1.add(nid)
+        return len(nid1.intersection(nid2))
+    else:
+        a_cat_b, counts = torch.cat([nid1, nid2]).unique(return_counts=True)
+        intersection = a_cat_b[torch.where(counts.gt(1))]
+        return len(intersection)
     a_cat_b, counts = torch.cat([nid1, nid2]).unique(return_counts=True)
     intersection = a_cat_b[torch.where(counts.gt(1))]
     return len(intersection)

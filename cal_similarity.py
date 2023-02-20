@@ -40,30 +40,48 @@ def main(conf):
 
     seeds = next(iter(train_loader))
     n_id, batch_size, adjs = quiver_sampler.sample(seeds)
+    layer_num = params.architecture.num_layers
     per_gpu = params.micro_pergpu
     micro_batchs = get_micro_batch_withlayer(adjs,
                                              n_id,
                                              batch_size, num_train_worker*per_gpu)
-    layernode_num = [0] * params.architecture.num_layers
-    for micro_batch in micro_batchs:
-        for layer in range(params.architecture.num_layers):
+    # micro_batchs = [[torch.tensor([7, 8, 9, 10]), torch.tensor([7, 8])],
+    #                 [torch.tensor([1, 2, 3, 4, 7, 8, 9]), torch.tensor([1, 2])]]  # test case
+    layernode_num = [0] * layer_num
+    full_batch = [torch.zeros(0).cuda()] * layer_num
+    # 求出每个layer的node数目和full batch node数目
+    for micro_batch in micro_batchs[1:]:
+        for layer in range(layer_num):
             layernode_num[layer] += len(micro_batch[layer])
-    random = False
-    layer_num = params.architecture.num_layers
-    max_sum_common_nodes = [0] * layer_num
-    reuse_rate = [0] * layer_num
+            full_batch[layer] = torch.cat(
+                [full_batch[layer], micro_batch[layer]])
+    # full batch求并集.
+    for layer in range(layer_num):
+        full_batch[layer] = full_batch[layer].unique()
+        assert full_batch[layer].dim() == 1, "The tensor is not 1D"
+    random = True
+    max_sum_common_nodes, micro_reuse_rate, full_reuse_rate = [
+        0] * layer_num, [0] * layer_num, [0] * layer_num
+    sets = [set() for i in range(layer_num)]
     if random == True:
         for gpu_idx in range(num_train_worker):
             start = gpu_idx * per_gpu
             end = start + per_gpu
+            # len(gpu) = 2  , per gpu have  2 nano batch
             gpu = micro_batchs[start:end]
             for layer in range(layer_num):
-                for i in range(len(gpu) - 1):
-                    max_sum_common_nodes[layer] += sim.common_nodes(
-                        gpu[i][layer], gpu[i + 1][layer])
+                for i in range(len(gpu)):
+                    l = gpu[i][layer].tolist()
+                    common_elements = set(l).intersection(sets[layer])
+                    count = len(common_elements)
+                    max_sum_common_nodes[layer] += count
+                    sets[layer].update(l)
         for layer in range(layer_num):
-            reuse_rate[layer] = max_sum_common_nodes[layer] / \
+            print(layernode_num[layer], len(full_batch[layer]))
+            micro_reuse_rate[layer] = max_sum_common_nodes[layer] / \
                 layernode_num[layer]
+            full_reuse_rate[layer] = max_sum_common_nodes[layer] / \
+                len(full_batch[layer])
     else:
         for perm in itertools.permutations(micro_batchs):
             sum_common_nodes = [0] * layer_num
@@ -79,11 +97,11 @@ def main(conf):
                 if sum_common_nodes[layer] > max_sum_common_nodes[layer]:
                     max_sum_common_nodes[layer] = sum_common_nodes[layer]
         for layer in range(layer_num):
-            reuse_rate[layer] = max_sum_common_nodes[layer] / \
+            micro_reuse_rate[layer] = max_sum_common_nodes[layer] / \
                 layernode_num[layer]
     for layer in range(layer_num):
-        log.log(logging.INFO, ',{},{},{},{},{}'.format(
-            random, num_train_worker, num_train_worker*per_gpu, layer, reuse_rate[layer]))
+        log.log(logging.INFO, ',{},{},{},{},{:.2f},{:.2f}'.format(
+            random, num_train_worker, num_train_worker*per_gpu, layer, micro_reuse_rate[layer], full_reuse_rate[layer]))
 
 
 if __name__ == '__main__':

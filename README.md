@@ -1,5 +1,5 @@
 # GNN Project
-We implment `gnn_project/pyg/smallgraphsampler.py` 
+We implment `slice adj and get  micro batch` graph partition 
 
 
 ```python

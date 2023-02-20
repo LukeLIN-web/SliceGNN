@@ -6,12 +6,14 @@ from microGNN.utils.get_micro_batch import *
 from microGNN.utils.calu_similarity import *
 import torch.nn.functional as F
 from torch_geometric.nn import SAGEConv
+import quiver
 # three hop
 edge_index = torch.tensor([[0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9],
                            [1, 6, 0, 2, 6, 1, 3, 7, 2, 4, 8, 3, 5, 9, 4, 9, 0, 1, 7, 2, 6, 8, 3, 7, 9, 4, 5, 8]], dtype=torch.long)
 x = Tensor([[1, 2], [2, 3], [3, 3], [4, 3], [5, 3],
             [6, 3], [7, 3], [8, 3], [9, 3], [10, 3]])
 num_features, hidden_size, num_classes = 2, 16, 1
+
 
 class SAGE(torch.nn.Module):
     def __init__(self, in_channels, hidden_channels, out_channels,
@@ -33,6 +35,7 @@ class SAGE(torch.nn.Module):
             if i != self.num_layers - 1:
                 x = F.relu(x)
         return x
+
 
 def test_overlap():
     train_loader = NeighborSampler(edge_index,
@@ -64,19 +67,24 @@ def test_overlap():
 
 
 def test_nodeid():
-    hop = [-1, -1, -1]# three hop
-    train_loader = NeighborSampler(edge_index,
-                                   sizes=hop, batch_size=4,
-                                   shuffle=False, num_workers=0, drop_last=True)
-    for batch_size, n_id, adjs in train_loader:
-        num_micro_batch = 1
-        micro_batchs = get_micro_batch_withlayer(adjs,
-                                                 n_id,
-                                                 batch_size, num_micro_batch)
+    hop = [1, 1]
+    train_idx = torch.arange(0, 10, dtype=torch.int64)
+    train_loader = torch.utils.data.DataLoader(
+        train_idx, batch_size=2, shuffle=False, drop_last=True)
+    csr_topo = quiver.CSRTopo(edge_index)  # Quiver
+    quiver_sampler = quiver.pyg.GraphSageSampler(
+        csr_topo, sizes=hop, device=0, mode='CPU')  # Quiver
+
+    for seeds in train_loader:  # Quiver
+        n_id, batch_size, adjs = quiver_sampler.sample(seeds)  # Quiver
+        print(adjs)
+        num_micro_batch = 2
+        micro_batchs = get_micro_batch(adjs,
+                                       n_id,
+                                       batch_size, num_micro_batch)
         for i in range(num_micro_batch):
             print(micro_batchs[i])
-            print(len(micro_batchs))
-
+        exit()
 
 
 def test_get_micro_batch():
@@ -140,6 +148,6 @@ def test_get_micro_batch():
 
 
 if __name__ == '__main__':
-    test_get_micro_batch()
+    # test_get_micro_batch()
     # test_overlap()
-    # test_nodeid()
+    test_nodeid()
