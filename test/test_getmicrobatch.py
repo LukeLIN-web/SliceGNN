@@ -84,8 +84,8 @@ def test_nodeid():
                                        batch_size, num_micro_batch)
         for i in range(num_micro_batch):
             print(micro_batchs[i])
-        exit()
-
+        
+        # exit()
 
 def test_get_micro_batch():
     # three hop

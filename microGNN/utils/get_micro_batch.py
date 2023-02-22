@@ -117,6 +117,7 @@ def get_micro_batch(
         subadjs = []
         for adj in adjs:
             target_size = len(sub_nid)
+            print(sub_nid)
             sub_nid, sub_adjs,  edge_mask = slice_adj(
                 sub_nid, adj.edge_index, relabel_nodes=True)
             subadjs.append(Adj(sub_adjs, None, (

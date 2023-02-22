@@ -1,5 +1,5 @@
 import os
-# import shutil
+import shutil
 # Set the root directory
 root_dir = './multirun/2023-02-20/'
 
@@ -16,4 +16,4 @@ with open(log_file, 'w') as f:
                     f.write(log.read())
 
 
-# shutil.rmtree(root_dir)
+shutil.rmtree(root_dir)

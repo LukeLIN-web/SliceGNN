@@ -39,7 +39,7 @@ def main(conf):
     torch.manual_seed(12345)
 
     seeds = next(iter(train_loader))
-    n_id, batch_size, adjs = quiver_sampler.sample(seeds)
+    n_id, batch_size, adjs = quiver_sampler.sample(seeds) #这里的n_id是全局的. 
     layer_num = params.architecture.num_layers
     per_gpu = params.micro_pergpu
     micro_batchs = get_micro_batch_withlayer(adjs,
@@ -71,7 +71,8 @@ def main(conf):
             gpu = micro_batchs[start:end]
             for layer in range(layer_num):
                 for i in range(len(gpu)):
-                    l = gpu[i][layer].tolist()
+                    # l = gpu[i][layer].tolist()
+                    l = n_id[gpu[i][layer]].tolist()
                     common_elements = set(l).intersection(sets[layer])
                     count = len(common_elements)
                     max_sum_common_nodes[layer] += count
