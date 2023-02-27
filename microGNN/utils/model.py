@@ -27,9 +27,6 @@ class SAGE(torch.nn.Module):
 
     @torch.no_grad()
     def inference(self, x_all, device, subgraph_loader):
-        # pbar = tqdm(total=x_all.size(0) * self.num_layers)
-        # pbar.set_description('Evaluating')
-
         for i in range(self.num_layers):
             xs = []
             for batch_size, n_id, adj in subgraph_loader:
@@ -41,10 +38,6 @@ class SAGE(torch.nn.Module):
                     x = F.relu(x)
                 xs.append(x)
 
-                # pbar.update(batch_size)
-
             x_all = torch.cat(xs, dim=0)
-
-        # pbar.close()
 
         return x_all

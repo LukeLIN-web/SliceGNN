@@ -1,13 +1,15 @@
-import os.path as osp
-from torch_geometric.datasets import  Reddit
+from torch_geometric.datasets import Reddit,Yelp,AmazonProducts
+from ogb.nodeproppred import PygNodePropPredDataset
 
 def get_dataset(name, root, use_sparse_tensor=False, bf16=False):
-    path = osp.join(osp.dirname(osp.realpath(__file__)), root, name)
-    
     if name == 'Reddit':
-        dataset = Reddit(root=path)
-
-    data = dataset[0]
-
-
-    return data, dataset.num_classes
+        dataset = Reddit(root + 'Reddit')
+    elif name == 'Yelp':
+        dataset = Yelp(root + 'Yelp')
+    elif name == 'AmazonProducts':
+        dataset = AmazonProducts(root + 'AmazonProducts')
+    elif name == 'ogbn-products':
+        dataset = PygNodePropPredDataset(name = "ogbn-products",root=root)
+    else:
+        raise NotImplementedError
+    return dataset
