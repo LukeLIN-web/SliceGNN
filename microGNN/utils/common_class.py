@@ -22,3 +22,4 @@ class Microbatch(NamedTuple):
         n_id = self.n_id.to(*args, **kwargs) if self.n_id is not None else None
         return Microbatch(self.n_id.to(*args, **kwargs),
                           self.adjs.to(*args, **kwargs), self.size)
+

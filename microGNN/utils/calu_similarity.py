@@ -8,7 +8,7 @@ def common_nodes_num(nid1, nid2: Tensor) -> int:
     """
     calu the common nodes number of two microbatch
     """
-    assert  len(nid2) > 0
+    assert len(nid2) > 0
     if isinstance(nid1,set):
         for nid in nid2:
             nid1.add(nid)

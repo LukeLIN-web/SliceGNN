@@ -127,7 +127,7 @@ def get_micro_batch(
     return micro_batchs
 
 
-def get_micro_batch_withlayer(
+def get_nano_batch_withlayer(
     adjs: List[Adj],
     n_id: Tensor,
     batch_size: int,
@@ -146,7 +146,7 @@ def get_micro_batch_withlayer(
     assert batch_size % num_micro_batch == 0
     adjs.reverse()
     micro_batch_size = batch_size // num_micro_batch     # TODO: or padding last batch
-    microbatchs = []
+    nanobatchs = []
     for i in range(num_micro_batch):
         sub_nid = n_id[i * micro_batch_size:(i + 1) * micro_batch_size]
         subnids = []
@@ -155,5 +155,5 @@ def get_micro_batch_withlayer(
                 sub_nid, adj.edge_index, relabel_nodes=True)
             subnids.append(sub_nid)
         subnids.reverse()  # O(n)
-        microbatchs.append(subnids)
-    return microbatchs
+        nanobatchs.append(subnids)
+    return nanobatchs
