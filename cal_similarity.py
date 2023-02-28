@@ -36,7 +36,7 @@ def run(conf):
     torch.manual_seed(12345)
     maxrate = [[] for i in range(layer_num)]
     minrate = [[] for i in range(layer_num)]
-    random = False
+    random = True
     for seeds in train_loader:
         n_id, batch_size, adjs = quiver_sampler.sample(
             seeds)  # there is gloabl n_id
@@ -73,18 +73,15 @@ def run(conf):
                     max_sum_common_nodes[layer] / layernode_num[layer])
                 minrate[layer].append(
                     min_sum_common_nodes[layer] / layernode_num[layer])
-    # calculate the average
-    avg_maxr, avg_minr = [], []
     for layer in range(layer_num):
-        avg_maxr.append(cal_metrics(maxrate[layer]))
-        avg_minr.append(cal_metrics(minrate[layer]))
-    for layer in range(layer_num):
+        max_metrics = cal_metrics(maxrate[layer])
         if random == True:
             log.log(logging.INFO, ',{},{},{},{},{:.2f}'.format(
-                random, gpu_num, gpu_num*per_gpu, layer, avg_maxr[layer]['mean']))
+                random, gpu_num, gpu_num*per_gpu, layer, max_metrics['mean']))
         else:
+            min_metrics = cal_metrics(minrate[layer])
             log.log(logging.INFO, ',{},{},{},{},{:.2f},{:.2f}'.format(
-                random, gpu_num, gpu_num*per_gpu, layer, avg_maxr[layer]['mean'], avg_minr[layer]['mean']))
+                random, gpu_num, gpu_num*per_gpu, layer, max_metrics['mean'], min_metrics['mean']))
 
 
 @ hydra.main(config_path='conf', config_name='config', version_base='1.1')
