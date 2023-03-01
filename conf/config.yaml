@@ -1,4 +1,4 @@
 defaults:
   - dataset: ogbn-products
   - model: sage
-root: '/tmp/datasets'
+root: "/data/"

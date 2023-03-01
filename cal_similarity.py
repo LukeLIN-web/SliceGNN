@@ -20,7 +20,7 @@ def onebyone(conf):
     dataset_name = conf.dataset.name
     params = conf.model.params[dataset_name]
     print(OmegaConf.to_yaml(conf))
-    dataset = get_dataset(dataset_name, "/data/")
+    dataset = get_dataset(dataset_name, conf.root)
     data = dataset[0]
     csr_topo = quiver.CSRTopo(data.edge_index)
     quiver_sampler = quiver.pyg.GraphSageSampler(

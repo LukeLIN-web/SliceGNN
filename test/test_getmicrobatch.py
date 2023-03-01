@@ -2,7 +2,7 @@ from torch import Tensor
 from typing import List
 from torch_geometric.loader import NeighborSampler
 import torch
-from get_nano_batch import *
+from microGNN.utils.get_nano_batch import *
 from microGNN.utils.calu_similarity import *
 import torch.nn.functional as F
 from torch_geometric.nn import SAGEConv
@@ -51,7 +51,7 @@ def test_overlap():
             # when hop = 1 , adjs is a EdgeIndex, we need convert it to list.
             adjs = [adjs]
         num_micro_batch = 2
-        micro_batchs = get_micro_batch(adjs,
+        micro_batchs = get_nano_batch(adjs,
                                        n_id,
                                        batch_size, num_micro_batch)
         for i in range(num_micro_batch - 1):
@@ -79,7 +79,7 @@ def test_nodeid():
         n_id, batch_size, adjs = quiver_sampler.sample(seeds)  # Quiver
         print(adjs)
         num_micro_batch = 2
-        micro_batchs = get_micro_batch(adjs,
+        micro_batchs = get_nano_batch(adjs,
                                        n_id,
                                        batch_size, num_micro_batch)
         for i in range(num_micro_batch):
@@ -87,7 +87,7 @@ def test_nodeid():
         
         # exit()
 
-def test_get_micro_batch():
+def test_get_nano_batch():
     # three hop
     hop = [-1, -1, -1]
     train_loader = NeighborSampler(edge_index,
@@ -97,7 +97,7 @@ def test_get_micro_batch():
     for batch_size, n_id, adjs in train_loader:
         out = model(x[n_id], adjs)
         num_micro_batch = 4
-        micro_batchs = get_micro_batch(adjs,
+        micro_batchs = get_nano_batch(adjs,
                                        n_id,
                                        batch_size, num_micro_batch)
         subgraphout = []
@@ -116,7 +116,7 @@ def test_get_micro_batch():
     for batch_size, n_id, adjs in train_loader:
         out = model(x[n_id], adjs)
         num_micro_batch = 4
-        micro_batchs = get_micro_batch(adjs,
+        micro_batchs = get_nano_batch(adjs,
                                        n_id,
                                        batch_size, num_micro_batch)
         subgraphout = []
@@ -135,7 +135,7 @@ def test_get_micro_batch():
             # when hop = 1 , adjs is a EdgeIndex, we need convert it to list.
             adjs = [adjs]
         num_micro_batch = 2
-        micro_batchs = get_micro_batch(adjs,
+        micro_batchs = get_nano_batch(adjs,
                                        n_id,
                                        batch_size, num_micro_batch)
         out = model(x[n_id], adjs)
