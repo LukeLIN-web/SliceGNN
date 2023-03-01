@@ -5,7 +5,8 @@ import torch
 import torch.nn.functional as F
 
 import os
-from utils import get_dataset, get_micro_batch
+from . import dataset
+from utils import get_micro_batch
 from torch_geometric.nn import SAGEConv
 from torch_geometric.profile import rename_profile_file, timeit
 import quiver
@@ -81,7 +82,7 @@ def run(rank, world_size, data, x, quiver_sampler: quiver.pyg.GraphSageSampler, 
 def main(args: argparse.ArgumentParser) -> None:
     world_size = args.gpu_num
     dataset_name = "Reddit"
-    data, num_classes = get_dataset(dataset_name, args.root,
+    data, num_classes = dataset(dataset_name, args.root,
                                     args.use_sparse_tensor, args.bf16)
     csr_topo = quiver.CSRTopo(data.edge_index)
 

@@ -2,7 +2,7 @@ from torch import Tensor
 from typing import List, Optional, Tuple, Union
 from torch_geometric.utils.num_nodes import maybe_num_nodes
 import torch
-from microGNN.utils.common_class import Adj, Microbatch
+from microGNN.utils.common_class import Adj, Nanobatch
 
 torch.set_printoptions(profile="full")
 
@@ -86,12 +86,12 @@ def slice_adj(
     return subset, edge_index,  edge_mask
 
 
-def get_micro_batch(
+def get_nano_batch(
     adjs: List[Adj],
     n_id: Tensor,
     batch_size: int,
     num_micro_batch: int = 2,
-) -> List[Microbatch]:
+) -> List[Nanobatch]:
     r"""Returns the micro batchs
 
     Args:
@@ -123,7 +123,7 @@ def get_micro_batch(
             subadjs.append(Adj(sub_adjs, None, (
                 len(sub_nid), target_size)))
         subadjs.reverse()  # O(n)
-        micro_batchs.append(Microbatch(sub_nid, micro_batch_size, subadjs))
+        micro_batchs.append(Nanobatch(sub_nid, micro_batch_size, subadjs))
     return micro_batchs
 
 

@@ -14,9 +14,9 @@ from torch.nn.parallel import DistributedDataParallel
 from torch_geometric.loader import NeighborSampler
 from timeit import default_timer
 import quiver
-from microGNN.utils.get_micro_batch import *
+from get_nano_batch import *
 from microGNN.utils.model import SAGE
-from microGNN.utils.get_dataset import get_dataset
+from dataset import get_dataset
 
 
 def train(data, x, quiver_sampler: quiver.pyg.GraphSageSampler, dataset, args):

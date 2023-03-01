@@ -1,4 +1,4 @@
 defaults:
-  - dataset: reddit
+  - dataset: ogbn-products
   - model: sage
 root: '/tmp/datasets'

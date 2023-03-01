@@ -8,27 +8,29 @@ import itertools
 import hydra
 from omegaconf import OmegaConf
 import torch
-from torch_geometric.datasets import Reddit
 import quiver
-from microGNN.utils.get_micro_batch import get_nano_batch_withlayer
+from microGNN.utils import get_nano_batch_withlayer, cal_metrics, get_dataset
 import microGNN.utils.calu_similarity as sim
 import logging
-from microGNN.utils.metrics import cal_metrics
 log = logging.getLogger(__name__)
 
 
 @ hydra.main(config_path='conf', config_name='config', version_base='1.1')
-def run(conf):
+def onebyone(conf):
     dataset_name = conf.dataset.name
     params = conf.model.params[dataset_name]
     print(OmegaConf.to_yaml(conf))
-    dataset = Reddit('/data/Reddit')
+    dataset = get_dataset(dataset_name, "/data/")
     data = dataset[0]
     csr_topo = quiver.CSRTopo(data.edge_index)
     quiver_sampler = quiver.pyg.GraphSageSampler(
         csr_topo, sizes=[25, 10], device=0, mode='GPU')
     gpu_num = params.num_train_worker
-    train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
+    if dataset_name == 'ogbn-products':
+        split_idx = dataset.get_idx_split()
+        train_idx, valid_idx, test_idx = split_idx["train"], split_idx["valid"], split_idx["test"]
+    else:
+        train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
     train_loader = torch.utils.data.DataLoader(
         train_idx, batch_size=params.batch_size*gpu_num, shuffle=False, drop_last=True)
     layer_num, per_gpu = params.architecture.num_layers, params.micro_pergpu
@@ -171,5 +173,5 @@ def main(conf):
 
 
 if __name__ == '__main__':
-    run()
+    onebyone()
     # oneminibatch_test()

@@ -2,7 +2,7 @@ from torch import Tensor
 from typing import List
 from torch_geometric.loader import NeighborSampler
 import torch
-from microGNN.utils.get_micro_batch import *
+from get_nano_batch import *
 from microGNN.utils.calu_similarity import *
 import torch.nn.functional as F
 from torch_geometric.nn import SAGEConv
