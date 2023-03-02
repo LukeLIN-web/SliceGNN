@@ -1,4 +1,4 @@
-# old NeighborSampler pytorch geometic  repo examples/ 
+# old NeighborSampler pytorch geometic  repo examples/
 
 import os
 
@@ -18,8 +18,7 @@ import argparse
 
 
 class SAGE(torch.nn.Module):
-    def __init__(self, in_channels, hidden_channels, out_channels,
-                 num_layers=2):
+    def __init__(self, in_channels, hidden_channels, out_channels, num_layers=2):
         super().__init__()
         self.num_layers = num_layers
 
@@ -31,7 +30,7 @@ class SAGE(torch.nn.Module):
 
     def forward(self, x, adjs):
         for i, (edge_index, _, size) in enumerate(adjs):
-            x_target = x[:size[1]]  # Target nodes are always placed first.
+            x_target = x[: size[1]]  # Target nodes are always placed first.
             x = self.convs[i]((x, x_target), edge_index)
             if i != self.num_layers - 1:
                 x = F.relu(x)
@@ -41,14 +40,14 @@ class SAGE(torch.nn.Module):
     @torch.no_grad()
     def inference(self, x_all, device, subgraph_loader):
         pbar = tqdm(total=x_all.size(0) * self.num_layers)
-        pbar.set_description('Evaluating')
+        pbar.set_description("Evaluating")
 
         for i in range(self.num_layers):
             xs = []
             for batch_size, n_id, adj in subgraph_loader:
                 edge_index, _, size = adj.to(device)
                 x = x_all[n_id].to(device)
-                x_target = x[:size[1]]
+                x_target = x[: size[1]]
                 x = self.convs[i]((x, x_target), edge_index)
                 if i != self.num_layers - 1:
                     x = F.relu(x)
@@ -64,22 +63,32 @@ class SAGE(torch.nn.Module):
 
 
 def run(rank, world_size, dataset):
-    os.environ['MASTER_ADDR'] = 'localhost'
-    os.environ['MASTER_PORT'] = '12355'
-    dist.init_process_group('nccl', rank=rank, world_size=world_size)
+    os.environ["MASTER_ADDR"] = "localhost"
+    os.environ["MASTER_PORT"] = "12355"
+    dist.init_process_group("nccl", rank=rank, world_size=world_size)
 
     data = dataset[0]
     train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
     train_idx = train_idx.split(train_idx.size(0) // world_size)[rank]
 
-    train_loader = NeighborSampler(data.edge_index, node_idx=train_idx,
-                                   sizes=[25, 10], batch_size=1024,
-                                   shuffle=True, num_workers=0)
+    train_loader = NeighborSampler(
+        data.edge_index,
+        node_idx=train_idx,
+        sizes=[25, 10],
+        batch_size=1024,
+        shuffle=True,
+        num_workers=0,
+    )
 
     if rank == 0:
-        subgraph_loader = NeighborSampler(data.edge_index, node_idx=None,
-                                          sizes=[-1], batch_size=2048,
-                                          shuffle=False, num_workers=6)
+        subgraph_loader = NeighborSampler(
+            data.edge_index,
+            node_idx=None,
+            sizes=[-1],
+            batch_size=2048,
+            shuffle=False,
+            num_workers=6,
+        )
 
     torch.manual_seed(12345)
     model = SAGE(dataset.num_features, 256, dataset.num_classes).to(rank)
@@ -104,7 +113,8 @@ def run(rank, world_size, dataset):
 
         if rank == 0:
             print(
-                f'Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {default_timer() - start}')
+                f"Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {default_timer() - start}"
+            )
 
         if rank == 0 and epoch % 5 == 0:  # We evaluate on a single GPU for now
             model.eval()
@@ -114,20 +124,20 @@ def run(rank, world_size, dataset):
             acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
             acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
             acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
-            print(f'Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}')
+            print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
 
         dist.barrier()
 
     dist.destroy_process_group()
 
 
-if __name__ == '__main__':
-    dataset = Reddit('/data/Reddit')
+if __name__ == "__main__":
+    dataset = Reddit("/data/Reddit")
     parser = argparse.ArgumentParser()
-    parser.add_argument('--num_epochs', type=int, default=4)
-    parser.add_argument('--gpus', type=int, default=2)
-    
+    parser.add_argument("--num_epochs", type=int, default=4)
+    parser.add_argument("--gpus", type=int, default=2)
+
     args = parser.parse_args()
-    world_size = args.num_gpu 
-    print('Let\'s use', world_size, 'GPUs!')
+    world_size = args.num_gpu
+    print("Let's use", world_size, "GPUs!")
     mp.spawn(run, args=(world_size, dataset), nprocs=world_size, join=True)

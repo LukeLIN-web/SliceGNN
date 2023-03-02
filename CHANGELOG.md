@@ -9,10 +9,10 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 - Neighborloader Pyg2.2.0 sample examples.
 - Finish benchmark gloo. Benchmark sample time, Backward+Forward time and distributed broadcast + scatter time.
 - Import benchmark utils.py
-- Implement get micro batch, slicing mini batch function 
+- Implement get micro batch, slicing mini batch function
 ### Changed
 - Change minibatch_reddit_quiver_origin.py to Process start instead of directly spawn
-- Fixed mini-batching with empty lists as attributes 
+- Fixed mini-batching with empty lists as attributes
 - refactor model at utils/model.py   ([37f923805c3])
 ### Removed
-- 
+-

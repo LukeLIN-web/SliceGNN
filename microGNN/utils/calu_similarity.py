@@ -9,7 +9,7 @@ def common_nodes_num(nid1, nid2: Tensor) -> int:
     calu the common nodes number of two microbatch
     """
     assert len(nid2) > 0
-    if isinstance(nid1,set):
+    if isinstance(nid1, set):
         for nid in nid2:
             nid1.add(nid)
         return len(nid1.intersection(nid2))
@@ -31,7 +31,7 @@ def Ochiai(nid1: Tensor, nid2: Tensor) -> float:
         a_cat_b, counts = torch.cat([nid1, nid2]).unique(return_counts=True)
         intersection = a_cat_b[torch.where(counts.gt(1))]
         # print("calu_similarity time: ", default_timer() - start)
-        return len(intersection) / sqrt(len1*len2)
+        return len(intersection) / sqrt(len1 * len2)
 
 
 def Jaccard(nid1: Tensor, nid2: Tensor) -> float:
@@ -46,4 +46,4 @@ def Jaccard(nid1: Tensor, nid2: Tensor) -> float:
         a_cat_b, counts = torch.cat([nid1, nid2]).unique(return_counts=True)
         intersection = a_cat_b[torch.where(counts.gt(1))]
         # print("calu_similarity time: ", default_timer() - start)
-        return len(intersection) / (len1+len2-len(intersection))
+        return len(intersection) / (len1 + len2 - len(intersection))

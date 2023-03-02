@@ -13,7 +13,7 @@ params:
     num_epoch: 5
     micro_pergpu: 2
     num_train_worker: 1
-    num_sample_worker: 1 
+    num_sample_worker: 1
   ogbn-products:
     architecture:
       num_layers: 2
@@ -27,4 +27,4 @@ params:
     num_epoch: 5
     micro_pergpu: 2
     num_train_worker: 1
-    num_sample_worker: 1 
+    num_sample_worker: 1

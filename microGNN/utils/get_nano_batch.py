@@ -12,8 +12,8 @@ def slice_adj(
     edge_index: Tensor,
     relabel_nodes: bool = False,
     num_nodes: Optional[int] = None,
-    flow: str = 'source_to_target',
-) -> Tuple[Tensor, Tensor,  Tensor]:
+    flow: str = "source_to_target",
+) -> Tuple[Tensor, Tensor, Tensor]:
     r"""Computes the microbatch edge_index of origin edge_index.
 
     The :attr:`flow` argument denotes the direction of edges for finding
@@ -39,14 +39,14 @@ def slice_adj(
             aggregation (:obj:`"source_to_target"` or
             :obj:`"target_to_source"`). (default: :obj:`"source_to_target"`)
 
-    :rtype: (:class:`LongTensor`, :class:`LongTensor`, 
+    :rtype: (:class:`LongTensor`, :class:`LongTensor`,
              :class:`BoolTensor`)
     """
 
     num_nodes = maybe_num_nodes(edge_index, num_nodes)
 
-    assert flow in ['source_to_target', 'target_to_source']
-    if flow == 'target_to_source':
+    assert flow in ["source_to_target", "target_to_source"]
+    if flow == "target_to_source":
         target, source = edge_index
     else:
         source, target = edge_index
@@ -78,12 +78,12 @@ def slice_adj(
     edge_index = edge_index[:, edge_mask]
 
     if relabel_nodes:
-        node_idx = target.new_full((num_nodes, ), -1)
+        node_idx = target.new_full((num_nodes,), -1)
         # tensor([ 0,  1,  2,  3, -1, -1,  4,  5, -1, -1])
         node_idx[subset] = torch.arange(subset.size(0), device=target.device)
         edge_index = node_idx[edge_index]
 
-    return subset, edge_index,  edge_mask
+    return subset, edge_index, edge_mask
 
 
 def get_nano_batch(
@@ -110,18 +110,18 @@ def get_nano_batch(
         batch_size -= mod
     assert batch_size % num_micro_batch == 0
     adjs.reverse()
-    micro_batch_size = batch_size // num_micro_batch     # TODO: or padding last batch
+    micro_batch_size = batch_size // num_micro_batch  # TODO: or padding last batch
     micro_batchs = []
     for i in range(num_micro_batch):
-        sub_nid = n_id[i * micro_batch_size:(i + 1) * micro_batch_size]
+        sub_nid = n_id[i * micro_batch_size : (i + 1) * micro_batch_size]
         subadjs = []
         for adj in adjs:
             target_size = len(sub_nid)
             print(sub_nid)
-            sub_nid, sub_adjs,  edge_mask = slice_adj(
-                sub_nid, adj.edge_index, relabel_nodes=True)
-            subadjs.append(Adj(sub_adjs, None, (
-                len(sub_nid), target_size)))
+            sub_nid, sub_adjs, edge_mask = slice_adj(
+                sub_nid, adj.edge_index, relabel_nodes=True
+            )
+            subadjs.append(Adj(sub_adjs, None, (len(sub_nid), target_size)))
         subadjs.reverse()  # O(n)
         micro_batchs.append(Nanobatch(sub_nid, micro_batch_size, subadjs))
     return micro_batchs
@@ -133,7 +133,7 @@ def get_nano_batch_withlayer(
     batch_size: int,
     num_micro_batch: int = 2,
 ) -> List[List[Tensor]]:
-    r"""Returns each layer node id 
+    r"""Returns each layer node id
 
     :rtype: List[ each layer node id ]
     """
@@ -145,14 +145,15 @@ def get_nano_batch_withlayer(
         batch_size -= mod
     assert batch_size % num_micro_batch == 0
     adjs.reverse()
-    micro_batch_size = batch_size // num_micro_batch     # TODO: or padding last batch
+    micro_batch_size = batch_size // num_micro_batch  # TODO: or padding last batch
     nanobatchs = []
     for i in range(num_micro_batch):
-        sub_nid = n_id[i * micro_batch_size:(i + 1) * micro_batch_size]
+        sub_nid = n_id[i * micro_batch_size : (i + 1) * micro_batch_size]
         subnids = []
         for adj in adjs:
             sub_nid, sub_adjs, edge_mask = slice_adj(
-                sub_nid, adj.edge_index, relabel_nodes=True)
+                sub_nid, adj.edge_index, relabel_nodes=True
+            )
             subnids.append(sub_nid)
         subnids.reverse()  # O(n)
         nanobatchs.append(subnids)

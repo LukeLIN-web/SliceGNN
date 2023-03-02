@@ -9,8 +9,7 @@ class Adj(NamedTuple):
 
     def to(self, *args, **kwargs):
         e_id = self.e_id.to(*args, **kwargs) if self.e_id is not None else None
-        return Adj(self.edge_index.to(*args, **kwargs),
-                   e_id, self.size)
+        return Adj(self.edge_index.to(*args, **kwargs), e_id, self.size)
 
 
 class Nanobatch(NamedTuple):
@@ -20,6 +19,6 @@ class Nanobatch(NamedTuple):
 
     def to(self, *args, **kwargs):
         n_id = self.n_id.to(*args, **kwargs) if self.n_id is not None else None
-        return Nanobatch(self.n_id.to(*args, **kwargs),
-                          self.adjs.to(*args, **kwargs), self.size)
-
+        return Nanobatch(
+            self.n_id.to(*args, **kwargs), self.adjs.to(*args, **kwargs), self.size
+        )

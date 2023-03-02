@@ -1,6 +1,7 @@
 import numpy as np
 
-def cal_metrics( arr : list) -> dict:
+
+def cal_metrics(arr: list) -> dict:
     """Calculate metrics for a list of numbers.
     mean, median, std, min, max, 25%, 75%, 90%, 95%, 99%
     """

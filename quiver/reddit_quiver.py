@@ -9,7 +9,7 @@ from torch_geometric.nn import SAGEConv
 
 import quiver
 
-path = osp.join(osp.dirname(osp.realpath(__file__)), '..', 'data', 'Reddit')
+path = osp.join(osp.dirname(osp.realpath(__file__)), "..", "data", "Reddit")
 dataset = Reddit(path)
 data = dataset[0]
 
@@ -21,17 +21,23 @@ train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
 # train_loader = NeighborSampler(data.edge_index, node_idx=data.train_mask,
 #                               sizes=[25, 10], batch_size=1024, shuffle=True,
 #                               num_workers=12) # Original PyG Code
-train_loader = torch.utils.data.DataLoader(train_idx,
-                                           batch_size=1024,
-                                           shuffle=True,
-                                           drop_last=True) # Quiver
-csr_topo = quiver.CSRTopo(data.edge_index) # Quiver
-quiver_sampler = quiver.pyg.GraphSageSampler(csr_topo, sizes=[25, 10], device=0, mode='GPU') # Quiver
+train_loader = torch.utils.data.DataLoader(
+    train_idx, batch_size=1024, shuffle=True, drop_last=True
+)  # Quiver
+csr_topo = quiver.CSRTopo(data.edge_index)  # Quiver
+quiver_sampler = quiver.pyg.GraphSageSampler(
+    csr_topo, sizes=[25, 10], device=0, mode="GPU"
+)  # Quiver
 
 
-subgraph_loader = NeighborSampler(data.edge_index, node_idx=None, sizes=[-1],
-                                  batch_size=1024, shuffle=False,
-                                  num_workers=12)
+subgraph_loader = NeighborSampler(
+    data.edge_index,
+    node_idx=None,
+    sizes=[-1],
+    batch_size=1024,
+    shuffle=False,
+    num_workers=12,
+)
 
 
 class SAGE(torch.nn.Module):
@@ -52,7 +58,7 @@ class SAGE(torch.nn.Module):
         # Target nodes are also included in the source nodes so that one can
         # easily apply skip-connections or add self-loops.
         for i, (edge_index, _, size) in enumerate(adjs):
-            x_target = x[:size[1]]  # Target nodes are always placed first.
+            x_target = x[: size[1]]  # Target nodes are always placed first.
             x = self.convs[i]((x, x_target), edge_index)
             if i != self.num_layers - 1:
                 x = F.relu(x)
@@ -61,7 +67,7 @@ class SAGE(torch.nn.Module):
 
     def inference(self, x_all):
         pbar = tqdm(total=x_all.size(0) * self.num_layers)
-        pbar.set_description('Evaluating')
+        pbar.set_description("Evaluating")
 
         # Compute representations of nodes layer by layer, using *all*
         # available edges. This leads to faster computation in contrast to
@@ -71,7 +77,7 @@ class SAGE(torch.nn.Module):
             for batch_size, n_id, adj in subgraph_loader:
                 edge_index, _, size = adj.to(device)
                 x = x_all[n_id].to(device)
-                x_target = x[:size[1]]
+                x_target = x[: size[1]]
                 x = self.convs[i]((x, x_target), edge_index)
                 if i != self.num_layers - 1:
                     x = F.relu(x)
@@ -86,7 +92,7 @@ class SAGE(torch.nn.Module):
         return x_all
 
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = SAGE(dataset.num_features, 256, dataset.num_classes)
 model = model.to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
@@ -96,26 +102,33 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 # Step 2: Using Quiver's Feature
 ################################
 # x = data.x.to(device) # Original PyG Code
-x = quiver.Feature(rank=0, device_list=[0], device_cache_size="4G", cache_policy="device_replicate", csr_topo=csr_topo) # Quiver
-x.from_cpu_tensor(data.x) # Quiver
+x = quiver.Feature(
+    rank=0,
+    device_list=[0],
+    device_cache_size="4G",
+    cache_policy="device_replicate",
+    csr_topo=csr_topo,
+)  # Quiver
+x.from_cpu_tensor(data.x)  # Quiver
 
 y = data.y.squeeze().to(device)
+
 
 def train(epoch):
     model.train()
 
     pbar = tqdm(total=int(data.train_mask.sum()))
-    pbar.set_description(f'Epoch {epoch:02d}')
+    pbar.set_description(f"Epoch {epoch:02d}")
 
     total_loss = total_correct = 0
     ############################################
     # Step 3: Training the PyG Model with Quiver
     ############################################
     # for batch_size, n_id, adjs in train_loader: # Original PyG Code
-    for seeds in train_loader: # Quiver
+    for seeds in train_loader:  # Quiver
         # n_id, batch_size, adjs = quiver_sampler.sample(seeds) # Quiver
         quiver.sample_once()
-        n_id, batch_size, adjs  = quiver.get_batch()
+        n_id, batch_size, adjs = quiver.get_batch()
         # `adjs` holds a list of `(edge_index, e_id, size)` tuples.
         adjs = [adj.to(device) for adj in adjs]
 
@@ -155,7 +168,6 @@ def test():
 
 for epoch in range(1, 11):
     loss, acc = train(epoch)
-    print(f'Epoch {epoch:02d}, Loss: {loss:.4f}, Approx. Train: {acc:.4f}')
+    print(f"Epoch {epoch:02d}, Loss: {loss:.4f}, Approx. Train: {acc:.4f}")
     train_acc, val_acc, test_acc = test()
-    print(f'Train: {train_acc:.4f}, Val: {val_acc:.4f}, '
-          f'Test: {test_acc:.4f}')
+    print(f"Train: {train_acc:.4f}, Val: {val_acc:.4f}, " f"Test: {test_acc:.4f}")

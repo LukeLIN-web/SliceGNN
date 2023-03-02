@@ -1,5 +1,5 @@
 # GNN Project
-We implment `slice adj and get  micro batch` graph partition 
+We implment `slice adj and get  micro batch` graph partition
 
 
 ```python
