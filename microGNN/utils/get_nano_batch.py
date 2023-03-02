@@ -154,7 +154,6 @@ def get_nano_batch_withlayer(
             sub_nid, sub_adjs, edge_mask = slice_adj(
                 sub_nid, adj.edge_index, relabel_nodes=True
             )
-            subnids.append(sub_nid)
-        subnids.reverse()  # O(n)
+            subnids.append(sub_nid)  # layer 0 is interal
         nanobatchs.append(subnids)
     return nanobatchs

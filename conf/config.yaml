@@ -1,4 +1,4 @@
 defaults:
-  - dataset: ogbn-products
+  - dataset: yelp
   - model: sage
 root: "/data/"
