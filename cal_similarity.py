@@ -5,8 +5,8 @@ getmicrobatch : yes
 """
 
 import itertools
-import torch
 import logging
+import torch
 import hydra
 from omegaconf import OmegaConf
 import quiver
@@ -58,7 +58,7 @@ def onebyone(conf):
         for nano_batch in nano_batchs:
             for layer in range(layer_num):
                 layernode_num[layer] += len(nano_batch[layer])
-        if random == True:
+        if random is True:
             for layer in range(layer_num):
                 for i in range(nanobatch_num - 1):
                     max_sum_common_nodes[layer] += sim.common_nodes_num(
@@ -89,25 +89,16 @@ def onebyone(conf):
                 )
     for layer in range(layer_num):
         max_metrics = cal_metrics(maxrate[layer])
-        if random == True:
+        if random is True:
             log.log(
                 logging.INFO,
-                ",{},{},{},{},{:.2f}".format(
-                    random, gpu_num, gpu_num * per_gpu, layer, max_metrics["mean"]
-                ),
+                f',{random},{gpu_num},{gpu_num * per_gpu},{layer},{max_metrics["mean"]:.2f}',
             )
         else:
             min_metrics = cal_metrics(minrate[layer])
             log.log(
                 logging.INFO,
-                ",{},{},{},{},{:.2f},{:.2f}".format(
-                    random,
-                    gpu_num,
-                    gpu_num * per_gpu,
-                    layer,
-                    max_metrics["mean"],
-                    min_metrics["mean"],
-                ),
+                f',{random},{gpu_num},{gpu_num * per_gpu},{layer},{max_metrics["mean"]:.2f}, {min_metrics["mean"]:.2f}',
             )
 
 
