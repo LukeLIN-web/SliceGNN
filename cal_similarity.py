@@ -25,7 +25,7 @@ def onebyone(conf):
     data = dataset[0]
     csr_topo = quiver.CSRTopo(data.edge_index)
     quiver_sampler = quiver.pyg.GraphSageSampler(
-        csr_topo, sizes=[25, 10], device=0, mode="GPU"
+        csr_topo, sizes=params.hop, device=0, mode="GPU"
     )
     gpu_num = params.num_train_worker
     if dataset_name == "ogbn-products":

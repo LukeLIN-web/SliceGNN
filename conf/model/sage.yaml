@@ -1,11 +1,12 @@
 name: sage
 params:
   architecture:
-    num_layers: 2
+    num_layers: 3
     hidden_channels: 256
     dropout: 0.5
   num_parts: 40
   batch_size: 1024
+  hop: [25, 10,5]
   num_workers: 0
   lr: 0.01
   dropout: 0.5
