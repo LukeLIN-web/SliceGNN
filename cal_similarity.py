@@ -19,7 +19,7 @@ log = logging.getLogger(__name__)
 @hydra.main(config_path="conf", config_name="config", version_base="1.1")
 def onebyone(conf):
     dataset_name = conf.dataset.name
-    params = conf.model.params[dataset_name]
+    params = conf.model.params
     print(OmegaConf.to_yaml(conf))
     dataset = get_dataset(dataset_name, conf.root)
     data = dataset[0]
