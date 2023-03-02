@@ -6,7 +6,6 @@ from microGNN.utils.get_nano_batch import *
 from microGNN.utils.calu_similarity import *
 import torch.nn.functional as F
 from torch_geometric.nn import SAGEConv
-import quiver
 
 # three hop
 
@@ -37,67 +36,6 @@ class SAGE(torch.nn.Module):
             if i != self.num_layers - 1:
                 x = F.relu(x)
         return x
-
-
-def test_overlap():
-    train_loader = NeighborSampler(
-        edge_index,
-        sizes=[-1],
-        batch_size=6,
-        shuffle=False,
-        num_workers=6,
-        drop_last=True,
-    )
-    model = SAGE(num_features, hidden_size, num_classes)
-    # one hop
-    train_loader = NeighborSampler(
-        edge_index,
-        sizes=[-1],
-        batch_size=6,
-        shuffle=False,
-        num_workers=6,
-        drop_last=True,
-    )
-    for batch_size, n_id, adjs in train_loader:
-        if isinstance(adjs[0], Tensor):
-            # when hop = 1 , adjs is a EdgeIndex, we need convert it to list.
-            adjs = [adjs]
-        num_micro_batch = 2
-        micro_batchs = get_nano_batch(adjs, n_id, batch_size, num_micro_batch)
-        for i in range(num_micro_batch - 1):
-            print(micro_batchs[i].n_id)
-            print(micro_batchs[i + 1].n_id)
-            print(n_id[micro_batchs[i].n_id])
-            print(n_id[micro_batchs[i + 1].n_id])
-            similarity1 = Jaccard(
-                n_id[micro_batchs[i].n_id], n_id[micro_batchs[i + 1].n_id]
-            )
-            similarity2 = Ochiai(
-                n_id[micro_batchs[i].n_id], n_id[micro_batchs[i + 1].n_id]
-            )
-            print(similarity1, similarity2)
-
-
-def test_nodeid():
-    hop = [1, 1]
-    train_idx = torch.arange(0, 10, dtype=torch.int64)
-    train_loader = torch.utils.data.DataLoader(
-        train_idx, batch_size=2, shuffle=False, drop_last=True
-    )
-    csr_topo = quiver.CSRTopo(edge_index)  # Quiver
-    quiver_sampler = quiver.pyg.GraphSageSampler(
-        csr_topo, sizes=hop, device=0, mode="CPU"
-    )  # Quiver
-
-    for seeds in train_loader:  # Quiver
-        n_id, batch_size, adjs = quiver_sampler.sample(seeds)  # Quiver
-        print(adjs)
-        num_micro_batch = 2
-        micro_batchs = get_nano_batch(adjs, n_id, batch_size, num_micro_batch)
-        for i in range(num_micro_batch):
-            print(micro_batchs[i])
-
-        # exit()
 
 
 def test_get_nano_batch():
@@ -167,6 +105,4 @@ def test_get_nano_batch():
 
 
 if __name__ == "__main__":
-    # test_get_micro_batch()
-    # test_overlap()
-    test_nodeid()
+    test_get_nano_batch()
