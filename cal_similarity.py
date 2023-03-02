@@ -5,13 +5,14 @@ getmicrobatch : yes
 '''
 
 import itertools
+import torch
+import logging
 import hydra
 from omegaconf import OmegaConf
-import torch
 import quiver
 from microGNN.utils import get_nano_batch_withlayer, cal_metrics, get_dataset
 import microGNN.utils.calu_similarity as sim
-import logging
+
 log = logging.getLogger(__name__)
 
 
