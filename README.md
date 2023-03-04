@@ -11,11 +11,10 @@ def slice_adj(
     flow: str = 'source_to_target',
 ) -> Tuple[Tensor, Tensor,  Tensor]:
 
-def get_micro_batch(
-    adjs : List[Adj],
+def get_nano_batch(
+    adjs: List[Adj],
     n_id: Tensor,
     batch_size: int,
-    num_micro_batch: int,
-) -> List[Microbatch]:
-
+    num_micro_batch: int = 2,
+) -> List[Nanobatch]:
 ```
