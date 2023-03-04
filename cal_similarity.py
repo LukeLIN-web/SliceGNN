@@ -58,12 +58,14 @@ def onebyone(conf):
         for nano_batch in nano_batchs:
             for layer in range(layer_num):
                 layernode_num[layer] += len(nano_batch[layer])
+        sets = [set() for i in range(layer_num)]
         if random is True:
             for layer in range(layer_num):
-                for i in range(nanobatch_num - 1):
-                    max_sum_common_nodes[layer] += sim.common_nodes_num(
-                        nano_batchs[i][layer], nano_batchs[i + 1][layer]
-                    )
+                for nano_batch in nano_batchs:
+                    l = nano_batch[layer].tolist()
+                    common_elements = set(l).intersection(sets[layer])
+                    max_sum_common_nodes[layer] += len(common_elements)
+                    sets[layer].update(l)
                 maxrate[layer].append(
                     max_sum_common_nodes[layer] / layernode_num[layer]
                 )
@@ -71,10 +73,11 @@ def onebyone(conf):
             for perm in itertools.permutations(nano_batchs):
                 sum_nodes = [0] * layer_num
                 for layer in range(layer_num):
-                    for i in range(nanobatch_num - 1):
-                        sum_nodes[layer] += sim.common_nodes_num(
-                            perm[i][layer], perm[i + 1][layer]
-                        )
+                    for nano_batch in nano_batchs:
+                        l = nano_batch[layer].tolist()
+                        common_elements = set(l).intersection(sets[layer])
+                        max_sum_common_nodes[layer] += len(common_elements)
+                        sets[layer].update(l)
                 for layer in range(layer_num):
                     if sum_nodes[layer] > max_sum_common_nodes[layer]:
                         max_sum_common_nodes[layer] = sum_nodes[layer]
@@ -92,13 +95,13 @@ def onebyone(conf):
         if random is True:
             log.log(
                 logging.INFO,
-                f',{random},{gpu_num},{gpu_num * per_gpu},{layer},{max_metrics["mean"]:.2f}',
+                f',{random},{dataset_name},{gpu_num * per_gpu},{layer},{max_metrics["mean"]:.2f},{max_metrics["std"]:.2f}',
             )
         else:
             min_metrics = cal_metrics(minrate[layer])
             log.log(
                 logging.INFO,
-                f',{random},{gpu_num},{gpu_num * per_gpu},{layer},{max_metrics["mean"]:.2f}, {min_metrics["mean"]:.2f}',
+                f',{random},{dataset_name},{gpu_num * per_gpu},{layer},{max_metrics["mean"]:.2f}, {min_metrics["mean"]:.2f}',
             )
 
 
