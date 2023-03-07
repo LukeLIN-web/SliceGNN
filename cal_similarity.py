@@ -1,6 +1,5 @@
 """
 sample : quiver
-dataset: reddit
 getmicrobatch : yes
 """
 
@@ -28,7 +27,7 @@ def onebyone(conf):
         csr_topo, sizes=params.hop, device=0, mode="GPU"
     )
     gpu_num = params.num_train_worker
-    if dataset_name == "ogbn-products":
+    if dataset_name == "ogbn-products" or dataset_name == "papers100M":
         split_idx = dataset.get_idx_split()
         train_idx, valid_idx, test_idx = (
             split_idx["train"],
@@ -58,11 +57,13 @@ def onebyone(conf):
         for nano_batch in nano_batchs:
             for layer in range(layer_num):
                 layernode_num[layer] += len(nano_batch[layer])
-        sets = [set() for i in range(layer_num)]
+        sets = [
+            set() for i in range(layer_num)
+        ]  # different mini batch has different sets
         if random is True:
             for layer in range(layer_num):
                 for nano_batch in nano_batchs:
-                    l = nano_batch[layer].tolist()
+                    l = nano_batch[layer].cpu().numpy()
                     common_elements = set(l).intersection(sets[layer])
                     max_sum_common_nodes[layer] += len(common_elements)
                     sets[layer].update(l)
@@ -74,9 +75,9 @@ def onebyone(conf):
                 sum_nodes = [0] * layer_num
                 for layer in range(layer_num):
                     for nano_batch in nano_batchs:
-                        l = nano_batch[layer].tolist()
+                        l = nano_batch[layer].cpu().numpy()
                         common_elements = set(l).intersection(sets[layer])
-                        max_sum_common_nodes[layer] += len(common_elements)
+                        sum_nodes[layer] += len(common_elements)
                         sets[layer].update(l)
                 for layer in range(layer_num):
                     if sum_nodes[layer] > max_sum_common_nodes[layer]:

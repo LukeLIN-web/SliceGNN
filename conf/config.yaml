@@ -1,4 +1,4 @@
 defaults:
-  - dataset: yelp
+  - dataset: papers100M
   - model: sage
-root: "/data/"
+root: "/data/ogb"

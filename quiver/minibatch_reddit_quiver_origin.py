@@ -22,39 +22,6 @@ import argparse
 from microGNN.utils.model import SAGE
 
 
-def parse_args(default_run_config):
-    argparser = argparse.ArgumentParser("GCN Training")
-
-    add_common_arguments(argparser, default_run_config)
-
-    argparser.add_argument(
-        "--fanout", nargs="+", type=int, default=default_run_config["fanout"]
-    )
-    argparser.add_argument("--lr", type=float, default=default_run_config["lr"])
-    argparser.add_argument(
-        "--dropout", type=float, default=default_run_config["dropout"]
-    )
-
-    return vars(argparser.parse_args())
-
-
-def get_run_config():
-    run_config = {}
-    run_config.update(get_default_common_config(run_mode=RunMode.NORMAL))
-    run_config["sample_type"] = "khop2"
-    run_config["fanout"] = [25, 10]
-    run_config["lr"] = 0.01
-    run_config["dropout"] = 0.5
-
-    run_config.update(parse_args(run_config))
-
-    run_config["num_fanout"] = run_config["num_layer"] = len(run_config["fanout"])
-
-    print_run_config(run_config)
-
-    return run_config
-
-
 def run(
     rank,
     world_size,
