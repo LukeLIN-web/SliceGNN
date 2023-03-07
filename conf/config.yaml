@@ -1,4 +1,4 @@
 defaults:
-  - dataset: papers100M
+  - dataset: reddit
   - model: sage
 root: "/data/ogb"

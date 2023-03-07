@@ -1,10 +1,10 @@
 from typing import List, NamedTuple, Tuple
-import torch
+from torch import Tensor
 
 
 class Adj(NamedTuple):
-    edge_index: torch.Tensor
-    e_id: torch.Tensor
+    edge_index: Tensor
+    e_id: Tensor
     size: Tuple[int, int]
 
     def to(self, *args, **kwargs):
@@ -13,12 +13,12 @@ class Adj(NamedTuple):
 
 
 class Nanobatch(NamedTuple):
-    n_id: torch.Tensor
+    n_id: Tensor
     size: int
     adjs: List[Adj]
 
     def to(self, *args, **kwargs):
         n_id = self.n_id.to(*args, **kwargs) if self.n_id is not None else None
         return Nanobatch(
-            self.n_id.to(*args, **kwargs), self.adjs.to(*args, **kwargs), self.size
+            self.n_id.to(*args, **kwargs), self.size, self.adjs.to(*args, **kwargs)
         )
