@@ -3,9 +3,9 @@ from ogb.nodeproppred import PygNodePropPredDataset
 
 
 def get_dataset(name, root, use_sparse_tensor=False, bf16=False):
-    if name == "Reddit":
+    if name == "reddit":
         dataset = Reddit(root + "Reddit")
-    elif name == "Yelp":
+    elif name == "yelp":
         dataset = Yelp(root + "Yelp")
     elif name == "AmazonProducts":
         dataset = AmazonProducts(root + "AmazonProducts")

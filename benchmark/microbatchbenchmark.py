@@ -12,8 +12,21 @@ from microGNN.utils import get_nano_batch, cal_metrics, get_dataset
 from microGNN.utils.model import SAGE
 from timeit import default_timer
 import torch.nn.functional as F
+from torch.profiler import profile, record_function, ProfilerActivity
 
 log = logging.getLogger(__name__)
+
+
+def criterion(logits, labels, dataset_name):
+    if dataset_name == "ogbn-products" or dataset_name == "papers100M":
+        loss = F.cross_entropy(logits, labels.squeeze())
+    elif dataset_name == "yelp":
+        loss = F.cross_entropy(logits, labels)
+    elif dataset_name == "reddit":
+        loss = F.nll_loss(logits, labels)
+    else:
+        raise NotImplementedError
+    return loss
 
 
 @hydra.main(config_path="../conf", config_name="config", version_base="1.1")
@@ -28,7 +41,7 @@ def train(conf):
         csr_topo, sizes=params.hop, device=0, mode="GPU"
     )
     rank = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    gpu_num = params.num_train_worker
+    gpu_num, per_gpu = params.num_train_worker, params.micro_pergpu
     if dataset_name == "ogbn-products" or dataset_name == "papers100M":
         split_idx = dataset.get_idx_split()
         train_idx, valid_idx, test_idx = (
@@ -41,36 +54,31 @@ def train(conf):
     train_loader = torch.utils.data.DataLoader(
         train_idx, batch_size=params.batch_size * gpu_num, shuffle=False, drop_last=True
     )
-    layer_num, per_gpu = params.architecture.num_layers, params.micro_pergpu
-    nanobatch_num = gpu_num * per_gpu
     torch.manual_seed(12345)
     model = SAGE(data.num_features, 256, dataset.num_classes).to(rank)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
-    x, y = data.x, data.y.to(rank)
-
+    x, y = data.x.to(rank), data.y.to(rank)
+    model.train()
     for epoch in range(1, 5):
-        model.train()
         epoch_start = default_timer()
         for seeds in train_loader:
             optimizer.zero_grad()
             n_id, batch_size, adjs = quiver_sampler.sample(seeds)
             target_node = n_id[: len(seeds)]
             nano_batchs = get_nano_batch(adjs, n_id, batch_size, gpu_num * per_gpu)
+            # nano_batchs = [(n_id, batch_size, adjs )]
             for n_id, size, adjs in nano_batchs:
                 out = model(x[n_id], adjs)  # forward
-                loss = F.nll_loss(out, y[target_node][:size])  # reddit loss
-                # loss = F.cross_entropy(out, y[target_node][:batch_size]) #yelp loss
-                # loss = F.cross_entropy(
-                #     out, y[target_node][:batch_size].squeeze()
-                # )  # products loss
+                loss = criterion(out, y[target_node][:size], dataset_name)
                 loss.backward()
             optimizer.step()
-
         print(
             f"Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {default_timer() - epoch_start}"
         )
-    print(f"Maximum GPU memory usage: {torch.cuda.max_memory_allocated()} bytes")
+    print(
+        f"Maximum GPU memory usage: {torch.cuda.max_memory_allocated()/10**9} G bytes"
+    )
 
 
 if __name__ == "__main__":
