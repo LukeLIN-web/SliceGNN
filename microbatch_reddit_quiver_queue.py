@@ -19,7 +19,7 @@ from torch_geometric.loader import NeighborSampler
 import quiver
 from timeit import default_timer
 from get_nano_batch import get_micro_batch
-from microGNN.utils.model import SAGE
+from microGNN.models import SAGE
 from microGNN.utils.common_config import gpu
 import logging
 

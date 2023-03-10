@@ -8,8 +8,8 @@ import torch
 import hydra
 from omegaconf import OmegaConf
 import quiver
+from microGNN.models import ScaleSAGE
 from microGNN.utils import get_nano_batch, cal_metrics, get_dataset
-from microGNN.utils.model import SAGE
 from timeit import default_timer
 import torch.nn.functional as F
 from torch.profiler import profile, record_function, ProfilerActivity
@@ -40,7 +40,7 @@ def train(conf):
     quiver_sampler = quiver.pyg.GraphSageSampler(
         csr_topo, sizes=params.hop, device=0, mode="GPU"
     )
-    rank = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     gpu_num, per_gpu = params.num_train_worker, params.micro_pergpu
     if dataset_name == "ogbn-products" or dataset_name == "papers100M":
         split_idx = dataset.get_idx_split()
@@ -55,11 +55,20 @@ def train(conf):
         train_idx, batch_size=params.batch_size * gpu_num, shuffle=False, drop_last=True
     )
     torch.manual_seed(12345)
-
-    model = SAGE(data.num_features, 256, dataset.num_classes).to(rank)
+    model = ScaleSAGE(
+        num_nodes=data.num_nodes,
+        in_channels=data.num_features,
+        hidden_channels=256,
+        out_channels=dataset.num_classes,
+        num_layers=2,
+        dropout=0.5,
+        drop_input=True,
+        pool_size=1,  # Number of pinned CPU buffers
+        buffer_size=500,  # Size of pinned CPU buffers (max #out-of-batch nodes)
+    ).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
-    x, y = data.x.to(rank), data.y.to(rank)
+    x, y = data.x.to(device), data.y.to(device)
     model.train()
     for epoch in range(1, 5):
         epoch_start = default_timer()

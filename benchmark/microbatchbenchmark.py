@@ -9,7 +9,7 @@ import hydra
 from omegaconf import OmegaConf
 import quiver
 from microGNN.utils import get_nano_batch, cal_metrics, get_dataset
-from microGNN.utils.model import SAGE
+from microGNN.models import SAGE
 from timeit import default_timer
 import torch.nn.functional as F
 from torch.profiler import profile, record_function, ProfilerActivity
