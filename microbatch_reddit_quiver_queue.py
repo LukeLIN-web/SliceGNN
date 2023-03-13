@@ -35,14 +35,15 @@ def run_sample(worker_id, params, dataset, quiver_sampler, nano_queues):
     num_sample_worker = params.num_sample_worker
     per_gpu = params.nano_pergpu
     ctx = sample_workers[worker_id]
+    torch.cuda.set_device(ctx)
     num_train_worker = params.num_train_worker
     print(
         "[Sample Worker {:d}/{:d}] Started with PID {:d}({:s})".format(
             worker_id, num_sample_worker, os.getpid(), torch.cuda.get_device_name(ctx)
         )
     )
+
     data = dataset[0]
-    torch.cuda.set_device(ctx)
     train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
 
     train_loader = torch.utils.data.DataLoader(
@@ -57,12 +58,10 @@ def run_sample(worker_id, params, dataset, quiver_sampler, nano_queues):
     for epoch in range(1, params.num_epoch + 1):
         epoch_start = default_timer()
         for seeds in train_loader:
-            seeds = next(iter(train_loader))
             n_id, batch_size, adjs = quiver_sampler.sample(seeds)
             nano_batchs = get_nano_batch(
                 adjs, n_id, batch_size, num_train_worker * per_gpu
             )
-
             for i in range(num_train_worker):
                 nano_queues[i].put((n_id, nano_batchs[i * per_gpu : (i + 1) * per_gpu]))
         epoch_end = default_timer()
@@ -96,7 +95,6 @@ def run_train(worker_id, params, x, dataset, queue):
     data = dataset[0]
     train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
     batch_size = params.batch_size * num_worker
-    length = train_idx.size(dim=0) // (1024 * num_worker)
 
     if worker_id == 0:
         subgraph_loader = NeighborSampler(
@@ -119,22 +117,20 @@ def run_train(worker_id, params, x, dataset, queue):
     optimizer = torch.optim.Adam(model.parameters(), lr=params.lr)
 
     y = data.y.to(train_device)
+    length = train_idx.size(dim=0) // (1024 * num_worker)
 
     for epoch in range(1, params.num_epoch + 1):
         model.train()
         epoch_start = default_timer()
-        for i in range(length):
+        for _ in range(length):
             optimizer.zero_grad()
             (n_id, nano_batchs) = queue.get()
             target_node = n_id[:batch_size][
                 worker_id * params.batch_size : (worker_id + 1) * params.batch_size
             ]
-            for i in range(len(nano_batchs)):
-                nano_batch = nano_batchs[i]
-                nano_batch_adjs = [
-                    adj.to(train_device) for adj in nano_batch.adjs
-                ]  # load topo
-                out = model(x[n_id][nano_batch.n_id], nano_batch_adjs)  # forward
+            for i, nano_batch in enumerate(nano_batchs):
+                nano_batch_adjs = [adj.to(train_device) for adj in nano_batch.adjs]
+                out = model(x[n_id][nano_batch.n_id], nano_batch_adjs)
                 loss = F.nll_loss(
                     out,
                     y[target_node][i * (nano_batch.size) : (i + 1) * (nano_batch.size)],
@@ -157,6 +153,7 @@ def run_train(worker_id, params, x, dataset, queue):
                     out = model.inference(x, worker_id, subgraph_loader)
             res = out.argmax(dim=-1) == y
             acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
+            assert acc1 > 0.90, "Sanity check , Low training accuracy."
             acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
             acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
             print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")

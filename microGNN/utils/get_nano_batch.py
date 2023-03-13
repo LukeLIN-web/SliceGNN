@@ -98,12 +98,12 @@ def get_nano_batch(
         adjs: each layer adj
         n_id : the node id of the batch
         batch_size: mini batch size
-        num_micro_batch: micro_batch number
+        num_nano_batch:  nano batch number
 
     :rtype: List[List[Tensor,int,list]]
     """
-    n_id = torch.arange(len(n_id))  # relabel for mini batch
     assert batch_size >= num_nano_batch, "batch_size must < num_micro_batch"
+    n_id = torch.arange(len(n_id))  # relabel for mini batch
     mod = batch_size % num_nano_batch
     if mod != 0:
         batch_size -= mod
@@ -135,8 +135,8 @@ def get_nano_batch_withlayer(
 
     :rtype: List[ each layer node id ]
     """
-    n_id = torch.arange(len(n_id))  # relabel for mini batch
     assert batch_size >= num_micro_batch, "batch_size must < num_micro_batch"
+    n_id = torch.arange(len(n_id))  # relabel for mini batch
     mod = batch_size % num_micro_batch
     if mod != 0:
         batch_size -= mod
