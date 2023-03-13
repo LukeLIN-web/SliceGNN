@@ -8,26 +8,13 @@ import hydra
 from omegaconf import OmegaConf
 import quiver
 from microGNN.utils import get_nano_batch, cal_metrics, get_dataset
-from microGNN.models import SAGE
+from microGNN.models import SAGE, criterion
 from timeit import default_timer
-import torch.nn.functional as F
 
 # from torch.profiler import profile, record_function, ProfilerActivity
 from torch_geometric.loader import NeighborSampler
 
 log = logging.getLogger(__name__)
-
-
-def criterion(logits, labels, dataset_name):
-    if dataset_name == "ogbn-products" or dataset_name == "papers100M":
-        loss = F.cross_entropy(logits, labels.squeeze())
-    elif dataset_name == "yelp":
-        loss = F.cross_entropy(logits, labels)
-    elif dataset_name == "reddit":
-        loss = F.nll_loss(logits, labels)
-    else:
-        raise NotImplementedError
-    return loss
 
 
 @hydra.main(config_path="../conf", config_name="config", version_base="1.1")
