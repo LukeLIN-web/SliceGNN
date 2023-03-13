@@ -1,7 +1,7 @@
 """
 sample : quiver
 dataset: reddit
-getmicrobatch : yes
+getnanobatch : yes
 """
 import os
 
@@ -18,7 +18,7 @@ from torch_geometric.loader import NeighborSampler
 
 import quiver
 from timeit import default_timer
-from get_nano_batch import get_micro_batch
+from microGNN.utils import get_nano_batch
 from microGNN.models import SAGE
 from microGNN.utils.common_config import gpu
 import logging
@@ -27,13 +27,13 @@ import logging
 log = logging.getLogger(__name__)
 
 
-def run_sample(worker_id, params, dataset, quiver_sampler, micro_queues):
+def run_sample(worker_id, params, dataset, quiver_sampler, nano_queues):
     sample_workers = [
         gpu(params.num_train_worker + i) for i in range(params.num_sample_worker)
     ]
 
     num_sample_worker = params.num_sample_worker
-    per_gpu = params.micro_pergpu
+    per_gpu = params.nano_pergpu
     ctx = sample_workers[worker_id]
     num_train_worker = params.num_train_worker
     print(
@@ -59,16 +59,14 @@ def run_sample(worker_id, params, dataset, quiver_sampler, micro_queues):
         for seeds in train_loader:
             seeds = next(iter(train_loader))
             n_id, batch_size, adjs = quiver_sampler.sample(seeds)
-            micro_batchs = get_micro_batch(
+            nano_batchs = get_nano_batch(
                 adjs, n_id, batch_size, num_train_worker * per_gpu
             )
 
             for i in range(num_train_worker):
-                micro_queues[i].put(
-                    (n_id, micro_batchs[i * per_gpu : (i + 1) * per_gpu])
-                )
-            epoch_end = default_timer()
-            print(f"Epoch: {epoch:03d}, Sample Epoch Time: {epoch_end - epoch_start}")
+                nano_queues[i].put((n_id, nano_batchs[i * per_gpu : (i + 1) * per_gpu]))
+        epoch_end = default_timer()
+        print(f"Epoch: {epoch:03d}, Sample Epoch Time: {epoch_end - epoch_start}")
 
 
 def run_train(worker_id, params, x, dataset, queue):
@@ -127,21 +125,19 @@ def run_train(worker_id, params, x, dataset, queue):
         epoch_start = default_timer()
         for i in range(length):
             optimizer.zero_grad()
-            (n_id, micro_batchs) = queue.get()
+            (n_id, nano_batchs) = queue.get()
             target_node = n_id[:batch_size][
                 worker_id * params.batch_size : (worker_id + 1) * params.batch_size
             ]
-            for i in range(len(micro_batchs)):
-                micro_batch = micro_batchs[i]
-                micro_batch_adjs = [
-                    adj.to(train_device) for adj in micro_batch.adjs
+            for i in range(len(nano_batchs)):
+                nano_batch = nano_batchs[i]
+                nano_batch_adjs = [
+                    adj.to(train_device) for adj in nano_batch.adjs
                 ]  # load topo
-                out = model(x[n_id][micro_batch.n_id], micro_batch_adjs)  # forward
+                out = model(x[n_id][nano_batch.n_id], nano_batch_adjs)  # forward
                 loss = F.nll_loss(
                     out,
-                    y[target_node][
-                        i * (micro_batch.size) : (i + 1) * (micro_batch.size)
-                    ],
+                    y[target_node][i * (nano_batch.size) : (i + 1) * (nano_batch.size)],
                 )
                 loss.backward()
             optimizer.step()
@@ -168,8 +164,7 @@ def run_train(worker_id, params, x, dataset, queue):
 
 @hydra.main(config_path="conf", config_name="config", version_base="1.1")
 def main(conf):
-    model_name, dataset_name = conf.model.name, conf.dataset.name
-    params = conf.model.params[dataset_name]
+    params = conf.model.params
 
     num_train_workers = params.num_train_worker
     num_sample_worker = params.num_sample_worker
@@ -194,11 +189,11 @@ def main(conf):
 
     workers = []
     mp.set_start_method("spawn")
-    microbatchs_qs = [mp.Queue(30) for i in range(num_train_workers)]
+    nanobatchs_qs = [mp.Queue(30) for i in range(num_train_workers)]
     for worker_id in range(num_sample_worker):
         p = mp.Process(
             target=run_sample,
-            args=(worker_id, params, dataset, quiver_sampler, microbatchs_qs),
+            args=(worker_id, params, dataset, quiver_sampler, nanobatchs_qs),
         )
         p.start()
         workers.append(p)
@@ -211,7 +206,7 @@ def main(conf):
                 params,
                 quiver_feature,
                 dataset,
-                microbatchs_qs[worker_id],
+                nanobatchs_qs[worker_id],
             ),
         )
         p.start()

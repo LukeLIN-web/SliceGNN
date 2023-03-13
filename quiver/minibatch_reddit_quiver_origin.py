@@ -19,7 +19,7 @@ from torch_geometric.loader import NeighborSampler
 from timeit import default_timer
 import quiver
 import argparse
-from models.model import SAGE
+from microGNN.models import SAGE
 
 
 def run(

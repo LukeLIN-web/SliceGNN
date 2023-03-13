@@ -90,7 +90,7 @@ def get_nano_batch(
     adjs: List[Adj],
     n_id: Tensor,
     batch_size: int,
-    num_micro_batch: int = 2,
+    num_nano_batch: int = 2,
 ) -> List[Nanobatch]:
     r"""Returns the micro batchs
 
@@ -103,16 +103,16 @@ def get_nano_batch(
     :rtype: List[List[Tensor,int,list]]
     """
     n_id = torch.arange(len(n_id))  # relabel for mini batch
-    assert batch_size >= num_micro_batch, "batch_size must < num_micro_batch"
-    mod = batch_size % num_micro_batch
+    assert batch_size >= num_nano_batch, "batch_size must < num_micro_batch"
+    mod = batch_size % num_nano_batch
     if mod != 0:
         batch_size -= mod
-    assert batch_size % num_micro_batch == 0
+    assert batch_size % num_nano_batch == 0
     adjs.reverse()
-    micro_batch_size = batch_size // num_micro_batch  # TODO: or padding last batch
-    micro_batchs = []
-    for i in range(num_micro_batch):
-        sub_nid = n_id[i * micro_batch_size : (i + 1) * micro_batch_size]
+    nano_batch_size = batch_size // num_nano_batch  # TODO: or padding last batch
+    nano_batchs = []
+    for i in range(num_nano_batch):
+        sub_nid = n_id[i * nano_batch_size : (i + 1) * nano_batch_size]
         subadjs = []
         for adj in adjs:
             target_size = len(sub_nid)
@@ -121,8 +121,8 @@ def get_nano_batch(
             )
             subadjs.append(Adj(sub_adjs, None, (len(sub_nid), target_size)))
         subadjs.reverse()  # O(n)
-        micro_batchs.append(Nanobatch(sub_nid, micro_batch_size, subadjs))
-    return micro_batchs
+        nano_batchs.append(Nanobatch(sub_nid, nano_batch_size, subadjs))
+    return nano_batchs
 
 
 def get_nano_batch_withlayer(

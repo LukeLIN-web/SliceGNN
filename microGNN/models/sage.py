@@ -1,7 +1,7 @@
 from torch_geometric.nn import SAGEConv
 import torch
 import torch.nn.functional as F
-
+from torch import Tensor
 
 # use for quiver sampler
 class SAGE(torch.nn.Module):
@@ -15,7 +15,7 @@ class SAGE(torch.nn.Module):
             self.convs.append(SAGEConv(hidden_channels, hidden_channels))
         self.convs.append(SAGEConv(hidden_channels, out_channels))
 
-    def forward(self, x, adjs):
+    def forward(self, x: Tensor, adjs: list) -> Tensor:
         for i, (edge_index, _, size) in enumerate(adjs):
             x_target = x[: size[1]]  # Target nodes are always placed first.
             x = self.convs[i]((x, x_target), edge_index)

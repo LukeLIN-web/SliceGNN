@@ -14,7 +14,7 @@ from torch_geometric.loader import NeighborSampler
 from timeit import default_timer
 import quiver
 from get_nano_batch import *
-from models.model import SAGE
+from microGNN.models import SAGE
 from dataset import get_dataset
 
 

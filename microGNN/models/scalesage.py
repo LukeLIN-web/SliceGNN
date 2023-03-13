@@ -14,11 +14,6 @@ class ScaleSAGE(ScalableGNN):
         hidden_channels: int,
         out_channels: int,
         num_layers: int,
-        dropout: float = 0.0,
-        drop_input: bool = True,
-        batch_norm: bool = False,
-        residual: bool = False,
-        linear: bool = False,
         pool_size: Optional[int] = None,
         buffer_size: Optional[int] = None,
         device=None,
@@ -51,3 +46,20 @@ class ScaleSAGE(ScalableGNN):
                 x = F.relu(x)
                 x = F.dropout(x, p=0.5, training=self.training)
         return x.log_softmax(dim=-1)
+
+    @torch.no_grad()
+    def inference(self, x_all, device, subgraph_loader):
+        for i in range(self.num_layers):
+            xs = []
+            for batch_size, n_id, adj in subgraph_loader:
+                edge_index, _, size = adj.to(device)
+                x = x_all[n_id].to(device)
+                x_target = x[: size[1]]
+                x = self.convs[i]((x, x_target), edge_index)
+                if i != self.num_layers - 1:
+                    x = F.relu(x)
+                xs.append(x)
+
+            x_all = torch.cat(xs, dim=0)
+
+        return x_all

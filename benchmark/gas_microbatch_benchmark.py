@@ -8,11 +8,12 @@ import torch
 import hydra
 from omegaconf import OmegaConf
 import quiver
-from microGNN.models import ScaleSAGE
+from microGNN.models import ScaleSAGE, SAGE
 from microGNN.utils import get_nano_batch, cal_metrics, get_dataset
 from timeit import default_timer
 import torch.nn.functional as F
 from torch.profiler import profile, record_function, ProfilerActivity
+from torch_geometric.loader import NeighborSampler
 
 log = logging.getLogger(__name__)
 
@@ -54,23 +55,32 @@ def train(conf):
     train_loader = torch.utils.data.DataLoader(
         train_idx, batch_size=params.batch_size * gpu_num, shuffle=False, drop_last=True
     )
+    subgraph_loader = NeighborSampler(
+        data.edge_index,
+        node_idx=None,
+        sizes=[-1],
+        batch_size=2048,
+        shuffle=False,
+        num_workers=6,
+    )
     torch.manual_seed(12345)
-    model = ScaleSAGE(
-        num_nodes=data.num_nodes,
-        in_channels=data.num_features,
-        hidden_channels=256,
-        out_channels=dataset.num_classes,
-        num_layers=2,
-        dropout=0.5,
-        drop_input=True,
-        pool_size=1,  # Number of pinned CPU buffers
-        buffer_size=500,  # Size of pinned CPU buffers (max #out-of-batch nodes)
+    model = SAGE(
+        data.num_features, params.architecture.hidden_channels, dataset.num_classes
     ).to(device)
+    # model = ScaleSAGE(
+    #     num_nodes=data.num_nodes,
+    #     in_channels=data.num_features,
+    #     hidden_channels=256,
+    #     out_channels=dataset.num_classes,
+    #     num_layers=2,
+    #     pool_size=1,  # Number of pinned CPU buffers
+    #     buffer_size=500,  # Size of pinned CPU buffers (max #out-of-batch nodes)
+    # ).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
     x, y = data.x.to(device), data.y.to(device)
-    model.train()
-    for epoch in range(1, 5):
+    for epoch in range(1, 21):
+        model.train()
         epoch_start = default_timer()
         for seeds in train_loader:
             optimizer.zero_grad()
@@ -86,6 +96,15 @@ def train(conf):
         print(
             f"Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {default_timer() - epoch_start}"
         )
+        if epoch % 5 == 0:  # We evaluate on a single GPU for now
+            model.eval()
+            with torch.no_grad():
+                out = model.inference(x, device, subgraph_loader)
+            res = out.argmax(dim=-1) == y
+            acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
+            acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
+            acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
+            print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
     print(
         f"Maximum GPU memory usage: {torch.cuda.max_memory_allocated()/10**9} G bytes"
     )

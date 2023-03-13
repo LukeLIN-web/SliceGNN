@@ -76,6 +76,15 @@ def train(conf):
         print(
             f"Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {default_timer() - epoch_start}"
         )
+        if epoch % 5 == 0:  # We evaluate on a single GPU for now
+            model.eval()
+            with torch.no_grad():
+                out = model.inference(x, device, subgraph_loader)
+            res = out.argmax(dim=-1) == y
+            acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
+            acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
+            acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
+            print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
     print(
         f"Maximum GPU memory usage: {torch.cuda.max_memory_allocated()/10**9} G bytes"
     )
