@@ -48,7 +48,7 @@ def train(conf):
         sizes=[-1],
         batch_size=2048,
         shuffle=False,
-        num_workers=6,
+        num_workers=14,
     )
     torch.manual_seed(12345)
     model = SAGE(data.num_features, 256, dataset.num_classes).to(rank)

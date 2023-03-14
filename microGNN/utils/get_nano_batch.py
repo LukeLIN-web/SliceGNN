@@ -62,9 +62,9 @@ def slice_adj(
     subsets = [node_idx]
 
     node_mask.fill_(False)
-    node_mask[subsets[-1]] = True
+    node_mask[node_idx] = True
     torch.index_select(node_mask, 0, target, out=edge_mask)  # select edge
-    subsets.append(source[edge_mask])
+    subsets = [node_idx, source[edge_mask]]
     # remove all target nodes from array .
     # subsets[0] is the target nodes , and we need place it at first.
     mask = torch.isin(subsets[1], subsets[0])
@@ -92,17 +92,17 @@ def get_nano_batch(
     batch_size: int,
     num_nano_batch: int = 2,
 ) -> List[Nanobatch]:
-    r"""Returns the micro batchs
+    r"""Create a list of `num_nano_batch` nanobatches from a list of adjacency matrices `adjs`.
 
     Args:
-        adjs: each layer adj
-        n_id : the node id of the batch
+        adjs (List[Adj]): List of each layer adjacency matrices.
+        n_id (torch.Tensor): Node indices.
         batch_size: mini batch size
         num_nano_batch:  nano batch number
 
     :rtype: List[List[Tensor,int,list]]
     """
-    assert batch_size >= num_nano_batch, "batch_size must < num_micro_batch"
+    assert batch_size >= num_nano_batch, "batch_size must be bigger than num_nano_batch"
     n_id = torch.arange(len(n_id))  # relabel for mini batch
     mod = batch_size % num_nano_batch
     if mod != 0:
@@ -132,6 +132,12 @@ def get_nano_batch_withlayer(
     num_micro_batch: int = 2,
 ) -> List[List[Tensor]]:
     r"""Returns each layer node id
+
+    Args:
+        adjs (List[Adj]): List of adjacency matrices.
+        n_id (torch.Tensor): Node indices.
+        batch_size (int): micro batch size
+        num_micro_batch (int ): Number of micro-batches to create. Defaults to 2.
 
     :rtype: List[ each layer node id ]
     """

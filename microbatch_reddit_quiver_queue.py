@@ -23,7 +23,6 @@ from microGNN.models import SAGE
 from microGNN.utils.common_config import gpu
 import logging
 
-# A logger for this file
 log = logging.getLogger(__name__)
 
 
