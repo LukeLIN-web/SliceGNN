@@ -6,8 +6,6 @@ from microGNN.utils.get_nano_batch import *
 import torch.nn.functional as F
 from torch_geometric.nn import SAGEConv
 
-# three hop
-
 edge_index = torch.tensor([[0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9],
                            [1, 6, 0, 2, 6, 1, 3, 7, 2, 4, 8, 3, 5, 9, 4, 9, 0, 1, 7, 2, 6, 8, 3, 7, 9, 4, 5, 8]], dtype=torch.long)  # fmt: skip
 x = Tensor(
@@ -35,6 +33,33 @@ class SAGE(torch.nn.Module):
             if i != self.num_layers - 1:
                 x = F.relu(x)
         return x
+
+
+def test_slice_adj():
+    edge_index = torch.tensor(
+        [
+            [0, 1, 2, 3, 4, 5],
+            [2, 2, 4, 4, 6, 6],
+        ]
+    )
+
+    subset, edge_index, edge_mask = slice_adj(6, edge_index, relabel_nodes=True)
+    assert subset.tolist() == [6, 4, 5]
+    assert edge_index.tolist() == [[1, 2], [0, 0]]
+    assert edge_mask.tolist() == [False, False, False, False, True, True]
+
+    edge_index = torch.tensor(
+        [
+            [1, 2, 4, 5],
+            [0, 1, 5, 6],
+        ]
+    )
+
+    subset, edge_index, edge_mask = slice_adj([0, 6], edge_index, relabel_nodes=True)
+
+    assert subset.tolist() == [0, 6, 1, 5]
+    assert edge_index.tolist() == [[2, 3], [0, 1]]
+    assert edge_mask.tolist() == [True, False, False, True]
 
 
 def test_get_nano_batch():
@@ -104,4 +129,5 @@ def test_get_nano_batch():
 
 
 if __name__ == "__main__":
-    test_get_nano_batch()
+    # test_get_nano_batch()
+    test_slice_adj()

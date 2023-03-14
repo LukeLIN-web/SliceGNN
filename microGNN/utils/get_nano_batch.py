@@ -14,7 +14,7 @@ def slice_adj(
     num_nodes: Optional[int] = None,
     flow: str = "source_to_target",
 ) -> Tuple[Tensor, Tensor, Tensor]:
-    r"""Computes the microbatch edge_index of origin edge_index.
+    r"""Computes the nano batch edge_index of origin edge_index.
 
     The :attr:`flow` argument denotes the direction of edges for finding
     If set to :obj:`"source_to_target"`, then the
@@ -59,13 +59,11 @@ def slice_adj(
     else:
         node_idx = node_idx.to(target.device)
 
-    subsets = [node_idx]
-
     node_mask.fill_(False)
     node_mask[node_idx] = True
     torch.index_select(node_mask, 0, target, out=edge_mask)  # select edge
     subsets = [node_idx, source[edge_mask]]
-    # remove all target nodes from array .
+    # remove all target nodes from array.
     # subsets[0] is the target nodes , and we need place it at first.
     mask = torch.isin(subsets[1], subsets[0])
     subsets[1] = subsets[1][~mask]
@@ -112,7 +110,9 @@ def get_nano_batch(
     nano_batch_size = batch_size // num_nano_batch  # TODO: or padding last batch
     nano_batchs = []
     for i in range(num_nano_batch):
-        sub_nid = n_id[i * nano_batch_size : (i + 1) * nano_batch_size]
+        sub_nid = n_id[
+            i * nano_batch_size : (i + 1) * nano_batch_size
+        ]  # 从target node开始
         subadjs = []
         for adj in adjs:
             target_size = len(sub_nid)
@@ -120,7 +120,7 @@ def get_nano_batch(
                 sub_nid, adj.edge_index, relabel_nodes=True
             )
             subadjs.append(Adj(sub_adjs, None, (len(sub_nid), target_size)))
-        subadjs.reverse()  # O(n)
+        subadjs.reverse()  # O(n) 大的在前面
         nano_batchs.append(Nanobatch(sub_nid, nano_batch_size, subadjs))
     return nano_batchs
 
@@ -136,8 +136,8 @@ def get_nano_batch_withlayer(
     Args:
         adjs (List[Adj]): List of adjacency matrices.
         n_id (torch.Tensor): Node indices.
-        batch_size (int): micro batch size
-        num_micro_batch (int ): Number of micro-batches to create. Defaults to 2.
+        batch_size (int): mini batch size
+        num_nano_batch (int ): Number of micro-batches to create. Defaults to 2.
 
     :rtype: List[ each layer node id ]
     """
