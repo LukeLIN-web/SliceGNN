@@ -1,7 +1,9 @@
-from torch import Tensor
 from typing import List, Optional, Tuple, Union
-from torch_geometric.utils.num_nodes import maybe_num_nodes
+
 import torch
+from torch import Tensor
+from torch_geometric.utils.num_nodes import maybe_num_nodes
+
 from microGNN.utils.common_class import Adj, Nanobatch
 
 torch.set_printoptions(profile="full")
@@ -67,7 +69,7 @@ def slice_adj(
     # subsets[0] is the target nodes , and we need place it at first.
     mask = torch.isin(subsets[1], subsets[0])
     subsets[1] = subsets[1][~mask]
-    subset = torch.cat(subsets[1:]).unique()
+    subset = subsets[1].unique()
     subset = torch.cat((subsets[0], subset), 0)
 
     node_mask.fill_(False)
@@ -76,7 +78,7 @@ def slice_adj(
     edge_index = edge_index[:, edge_mask]
 
     if relabel_nodes:
-        node_idx = target.new_full((num_nodes,), -1)
+        node_idx = target.new_full((num_nodes, ), -1)
         # tensor([ 0,  1,  2,  3, -1, -1,  4,  5, -1, -1])
         node_idx[subset] = torch.arange(subset.size(0), device=target.device)
         edge_index = node_idx[edge_index]
@@ -84,13 +86,17 @@ def slice_adj(
     return subset, edge_index, edge_mask
 
 
+# because neighbor sampler mappping the node index in edge index.
+# so we set sub_nid, adj.edge_index, relabel_nodes=True to get same output.
 def get_nano_batch(
     adjs: List[Adj],
     n_id: Tensor,
     batch_size: int,
     num_nano_batch: int = 2,
+    relabel_nodes: bool = True,
 ) -> List[Nanobatch]:
-    r"""Create a list of `num_nano_batch` nanobatches from a list of adjacency matrices `adjs`.
+    r"""Create a list of `num_nano_batch` nanobatches
+    from a list of adjacency matrices `adjs`.
 
     Args:
         adjs (List[Adj]): List of each layer adjacency matrices.
@@ -100,24 +106,27 @@ def get_nano_batch(
 
     :rtype: List[List[Tensor,int,list]]
     """
-    assert batch_size >= num_nano_batch, "batch_size must be bigger than num_nano_batch"
+    assert (batch_size >= num_nano_batch
+            ), "batch_size must be bigger than num_nano_batch"  # noqa
     n_id = torch.arange(len(n_id))  # relabel for mini batch
     mod = batch_size % num_nano_batch
     if mod != 0:
         batch_size -= mod
     assert batch_size % num_nano_batch == 0
     adjs.reverse()
-    nano_batch_size = batch_size // num_nano_batch  # TODO: or padding last batch
+    nano_batch_size = batch_size // num_nano_batch  # TODO: padding last batch
     nano_batchs = []
     for i in range(num_nano_batch):
-        sub_nid = n_id[
-            i * nano_batch_size : (i + 1) * nano_batch_size
-        ]  # 从target node开始
+        sub_nid = n_id[i * nano_batch_size:(i + 1) *
+                       nano_batch_size]  # 从target node开始
         subadjs = []
         for adj in adjs:
             target_size = len(sub_nid)
             sub_nid, sub_adjs, edge_mask = slice_adj(
-                sub_nid, adj.edge_index, relabel_nodes=True
+                # sub_nid, adj.edge_index, relabel_nodes=True
+                sub_nid,
+                adj.edge_index,
+                relabel_nodes=relabel_nodes,
             )
             subadjs.append(Adj(sub_adjs, None, (len(sub_nid), target_size)))
         subadjs.reverse()  # O(n) 大的在前面
@@ -137,7 +146,7 @@ def get_nano_batch_withlayer(
         adjs (List[Adj]): List of adjacency matrices.
         n_id (torch.Tensor): Node indices.
         batch_size (int): mini batch size
-        num_nano_batch (int ): Number of micro-batches to create. Defaults to 2.
+        num_nano_batch (int ): Number of micro-batches to create. Defaults 2
 
     :rtype: List[ each layer node id ]
     """
@@ -148,15 +157,15 @@ def get_nano_batch_withlayer(
         batch_size -= mod
     assert batch_size % num_micro_batch == 0
     adjs.reverse()
-    micro_batch_size = batch_size // num_micro_batch  # TODO: or padding last batch
+    micro_batch_size = batch_size // num_micro_batch
     nanobatchs = []
     for i in range(num_micro_batch):
-        sub_nid = n_id[i * micro_batch_size : (i + 1) * micro_batch_size]
+        sub_nid = n_id[i * micro_batch_size:(i + 1) * micro_batch_size]
         subnids = []
         for adj in adjs:
-            sub_nid, sub_adjs, edge_mask = slice_adj(
-                sub_nid, adj.edge_index, relabel_nodes=True
-            )
+            sub_nid, sub_adjs, edge_mask = slice_adj(sub_nid,
+                                                     adj.edge_index,
+                                                     relabel_nodes=True)
             subnids.append(sub_nid)  # layer 0 is interal
         nanobatchs.append(subnids)
     return nanobatchs
