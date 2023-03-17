@@ -1,9 +1,11 @@
 from typing import List
-from torch_geometric.loader import NeighborSampler
+
 import torch
-from microGNN.utils.get_nano_batch import *
+from torch_geometric.loader import NeighborSampler
+
 from microGNN.prune import prune
 from microGNN.utils.common_class import Adj, Nanobatch
+from microGNN.utils.get_nano_batch import *
 
 edge_index = torch.tensor([[0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9],
                            [1, 6, 0, 2, 6, 1, 3, 7, 2, 4, 8, 3, 5, 9, 4, 9, 0, 1, 7, 2, 6, 8, 3, 7, 9, 4, 5, 8]], dtype=torch.long)  # fmt: skip
@@ -26,8 +28,6 @@ def test_getprune():
     # for batch_size, n_id, adjs in train_loader:
     batch_size, n_id, adjs = next(iter(train_loader))
     print(batch_size, n_id, adjs)
-    print(adjs[0].edge_index.dtype)
-    print(n_id.dtype)
 
 
 # 验证prune正确性
