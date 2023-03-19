@@ -60,14 +60,12 @@ def test_prune():
     target_node = torch.tensor([2])
     cached_nodes = torch.tensor([[3], [4]])  # target node, 1hop, 2hop ...
     sub_n_id, sub_adjs = prune(target_node, adjs, cached_nodes)
-    assert torch.all(torch.eq(sub_n_id, torch.tensor([2, 3, 4, 6, 7])))
-    assert torch.all(
-        torch.eq(
-            sub_adjs[1].edge_index,
-            torch.tensor([[3, 4, 6, 7, 5, 8], [2, 2, 3, 3, 4, 4]]),
-        ))
-    assert torch.all(
-        torch.eq(sub_adjs[0].edge_index, torch.tensor([[3, 4], [2, 2]])))
+    assert torch.equal(sub_n_id, torch.tensor([2, 3, 4, 6, 7]))
+    assert torch.equal(
+        sub_adjs[1].edge_index,
+        torch.tensor([[3, 4, 6, 7, 5, 8], [2, 2, 3, 3, 4, 4]]),
+    )
+    assert torch.equal(sub_adjs[0].edge_index, torch.tensor([[3, 4], [2, 2]]))
 
 
 if __name__ == "__main__":
