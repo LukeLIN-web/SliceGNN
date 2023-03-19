@@ -1,6 +1,7 @@
 import torch
 from torch_geometric.loader import NeighborSampler
 
+from microGNN import History
 from microGNN.models import ScaleSAGE
 from microGNN.prune import prune
 from microGNN.utils import get_nano_batch
@@ -30,25 +31,24 @@ def test_save_embedding():
         shuffle=False,
         drop_last=True,
     )
-
+    num_hidden = 2
     batch_size, n_id, adjs = next(iter(train_loader))
     print(batch_size, n_id, adjs)
-    model = ScaleSAGE(2, 256, 10, num_layers)
+    model = ScaleSAGE(2, num_hidden, 10, num_layers)
     model.eval()
     nano_batchs = get_nano_batch(adjs,
                                  n_id,
                                  batch_size,
                                  num_nano_batch=2,
                                  relabel_nodes=True)
-    for nano_batch in nano_batchs:
-        print(nano_batch)
-        print(x[n_id][nano_batch.n_id])
-    # histories = torch.nn.ModuleList(
-    #         [History(len(n_id), 256, 'cpu') for _ in range(num_layers - 1)]
-    #     )
-    # for i, nano_batch in enumerate(nano_batchs):
-    #     out = model(x[n_id][nano_batch.n_id], nano_batch.adjs, n_id[nano_batch.n_id], histories) # noqa
-    # print(histories)
+    for nb in nano_batchs:
+        print(nb)
+        print(x[n_id][nb.n_id])
+    histories = torch.nn.ModuleList(
+        [History(len(n_id), num_hidden, 'cpu') for _ in range(num_layers - 1)])
+    for i, nb in enumerate(nano_batchs):
+        out = model(x[n_id][nb.n_id], nb.adjs, nb.n_id, histories)  # noqa
+    print(histories)
 
 
 def test_prune():

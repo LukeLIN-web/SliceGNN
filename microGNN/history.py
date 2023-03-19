@@ -14,9 +14,10 @@ class History(torch.nn.Module):
         self.embedding_dim = embedding_dim
 
         pin_memory = device is None or str(device) == "cpu"
-        self.emb = torch.empty(
-            num_embeddings, embedding_dim, device=device, pin_memory=pin_memory
-        )
+        self.emb = torch.empty(num_embeddings,
+                               embedding_dim,
+                               device=device,
+                               pin_memory=pin_memory)
 
         self._device = torch.device("cpu")
 
@@ -41,7 +42,7 @@ class History(torch.nn.Module):
     @torch.no_grad()
     def push(
         self,
-        x,
+        x: Tensor,
         n_id: Optional[Tensor] = None,
         offset: Optional[Tensor] = None,
         count: Optional[Tensor] = None,
@@ -61,19 +62,18 @@ class History(torch.nn.Module):
             src_o = 0
             x = x.to(self.emb.device)
             for (
-                dst_o,
-                c,
+                    dst_o,
+                    c,
             ) in zip(offset.tolist(), count.tolist()):
-                self.emb[dst_o : dst_o + c] = x[src_o : src_o + c]
+                self.emb[dst_o:dst_o + c] = x[src_o:src_o + c]
                 src_o += c
 
     def forward(self, *args, **kwargs):
         """"""
-        raise NotImplementedError
+        raise NotImplementedError  # hisotry不是model,只是用了数据结构.
 
     def __repr__(self) -> str:
-        return (
-            f"{self.__class__.__name__}({self.num_embeddings}, "
-            f"{self.embedding_dim}, emb_device={self.emb.device}, "
-            f"device={self._device})"
-        )
+        return (f"{self.__class__.__name__}({self.num_embeddings}, "
+                f"{self.embedding_dim}, emb_device={self.emb.device}, "
+                f"device={self._device})"
+                f"{self.emb}")

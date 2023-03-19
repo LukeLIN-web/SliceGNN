@@ -69,11 +69,9 @@ def test_get_nano_batch():
         print(nano_batch.adjs)
     assert torch.equal(nano_batchs[0].n_id, torch.tensor([0, 1, 2, 3]))
     assert torch.equal(nano_batchs[1].n_id, torch.tensor([1, 0, 3, 2]))
-    assert torch.equal(
-        nano_batchs[1].adjs[0].edge_index,
-        torch.tensor([[0, 3, 1, 2, 0], [
-            1, 1, 0, 0, 2
-        ]]))  # TODO: [1,1] is not the target nodes, it is potential probelm
+    assert torch.equal(nano_batchs[1].adjs[0].edge_index,
+                       torch.tensor([[0, 3, 1, 2, 0], [1, 1, 0, 0, 2]]))
+    # TODO: [1,1] is not the target nodes, it is potential problem
     assert torch.equal(x[n_id][nano_batchs[0].n_id],
                        torch.tensor([[0., 0.], [1., 1.], [6., 6.], [2., 2.]]))
 
