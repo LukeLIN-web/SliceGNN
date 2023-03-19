@@ -113,6 +113,8 @@ def get_nano_batch(
     if mod != 0:
         batch_size -= mod
     assert batch_size % num_nano_batch == 0
+    if not isinstance(adjs, list):
+        adjs = [adjs]
     adjs.reverse()
     nano_batch_size = batch_size // num_nano_batch  # TODO: padding last batch
     nano_batchs = []
@@ -123,7 +125,6 @@ def get_nano_batch(
         for adj in adjs:
             target_size = len(sub_nid)
             sub_nid, sub_adjs, edge_mask = slice_adj(
-                # sub_nid, adj.edge_index, relabel_nodes=True
                 sub_nid,
                 adj.edge_index,
                 relabel_nodes=relabel_nodes,

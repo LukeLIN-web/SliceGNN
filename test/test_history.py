@@ -1,19 +1,28 @@
 import torch
 from torch_geometric.loader import NeighborSampler
 
+from microGNN.models import ScaleSAGE
 from microGNN.prune import prune
 from microGNN.utils import get_nano_batch
 from microGNN.utils.common_class import Adj
 
-edge_index = torch.tensor([[0, 0, 1, 1, 2, 6], [1, 6, 0, 2, 1, 0]],
-                          dtype=torch.long)  # fmt: skip
+# yapf: disable
+edge_index = torch.tensor([[0, 0, 1, 1, 2, 6],
+                           [1, 6, 0, 2, 1, 0]],dtype=torch.long)  # noqa
 
-x = torch.tensor([[1, 2], [2, 3], [3, 3], [4, 3], [5, 3], [6, 3], [7, 3],
-                  [8, 3], [9, 3], [10, 3]])
+x = torch.tensor([[0, 0], [1, 1], [2, 2], [3, 3], [4, 4], [5, 5], [6, 6], # noqa
+                  [8, 3], [9, 3], [10, 3]],dtype=torch.float) # noqa
+# yapf: enable
+
+# sample and then get nano batch,
+# then forward nano batch, get what node has be calculated ,return them.
 
 
-def test_getprune():
+# sample and then get nano batch,
+# then forward nano batch, save the embedding of the node in the nano batch
+def test_save_embedding():
     hop = [-1, -1]
+    num_layers = len(hop)
     train_loader = NeighborSampler(
         edge_index,
         sizes=hop,
@@ -21,20 +30,27 @@ def test_getprune():
         shuffle=False,
         drop_last=True,
     )
-    # for batch_size, n_id, adjs in train_loader:
+
     batch_size, n_id, adjs = next(iter(train_loader))
     print(batch_size, n_id, adjs)
-    # target_node = n_id[:batch_size]
+    model = ScaleSAGE(2, 256, 10, num_layers)
+    model.eval()
     nano_batchs = get_nano_batch(adjs,
                                  n_id,
                                  batch_size,
                                  num_nano_batch=2,
-                                 relabel_nodes=False)
+                                 relabel_nodes=True)
     for nano_batch in nano_batchs:
         print(nano_batch)
+        print(x[n_id][nano_batch.n_id])
+    # histories = torch.nn.ModuleList(
+    #         [History(len(n_id), 256, 'cpu') for _ in range(num_layers - 1)]
+    #     )
+    # for i, nano_batch in enumerate(nano_batchs):
+    #     out = model(x[n_id][nano_batch.n_id], nano_batch.adjs, n_id[nano_batch.n_id], histories) # noqa
+    # print(histories)
 
 
-# 验证prune正确性
 def test_prune():
     edge1 = torch.tensor([[3, 4], [2, 2]])
     adjs1 = Adj(edge1, None, (3, 1))
@@ -56,4 +72,4 @@ def test_prune():
 
 if __name__ == "__main__":
     # test_prune()
-    test_getprune()
+    test_save_embedding()
