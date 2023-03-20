@@ -1,9 +1,6 @@
-from typing import Optional, Callable, Dict, Any
+from typing import Optional
 
 import torch
-from torch import Tensor
-
-from microGNN import History
 
 
 class ScalableGNN(torch.nn.Module):
@@ -38,7 +35,6 @@ class ScalableGNN(torch.nn.Module):
 
     def __init__(
         self,
-        num_nodes: int,
         hidden_channels: int,
         num_layers: int,
         pool_size: Optional[int] = None,
@@ -47,15 +43,10 @@ class ScalableGNN(torch.nn.Module):
     ):
         super().__init__()
 
-        self.num_nodes = num_nodes
         self.hidden_channels = hidden_channels
         self.num_layers = num_layers
         self.pool_size = num_layers - 1 if pool_size is None else pool_size
         self.buffer_size = buffer_size
-
-        self.histories = torch.nn.ModuleList(
-            [History(num_nodes, hidden_channels, device) for _ in range(num_layers - 1)]
-        )
 
     @property
     def emb_device(self):

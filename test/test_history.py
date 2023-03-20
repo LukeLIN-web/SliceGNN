@@ -15,8 +15,35 @@ x = torch.tensor([[0, 0], [1, 1], [2, 2], [3, 3], [4, 4], [5, 5], [6, 6], # noqa
                   [8, 3], [9, 3], [10, 3]],dtype=torch.float) # noqa
 # yapf: enable
 
+
 # sample and then get nano batch,
 # then forward nano batch, get what node has be calculated ,return them.
+def test_load_embedding():
+    hop = [-1, -1]
+    num_layers = len(hop)
+    train_loader = NeighborSampler(
+        edge_index,
+        sizes=hop,
+        batch_size=2,
+        shuffle=False,
+        drop_last=True,
+    )
+    num_hidden = 2
+    batch_size, n_id, adjs = next(iter(train_loader))
+    model = ScaleSAGE(in_channels=2,
+                      hidden_channels=num_hidden,
+                      out_channels=2,
+                      num_layers=num_layers)
+    model.eval()
+    nano_batchs = get_nano_batch(adjs,
+                                 n_id,
+                                 batch_size,
+                                 num_nano_batch=2,
+                                 relabel_nodes=True)
+    histories = torch.nn.ModuleList(
+        [History(len(n_id), num_hidden, 'cpu') for _ in range(num_layers - 1)])
+    nb = nano_batchs[0]
+    model(x[n_id][nb.n_id], nb.adjs, nb.n_id, histories)  # noqa
 
 
 # sample and then get nano batch,
@@ -33,7 +60,6 @@ def test_save_embedding():
     )
     num_hidden = 2
     batch_size, n_id, adjs = next(iter(train_loader))
-    # print(batch_size, n_id, adjs)
     model = ScaleSAGE(in_channels=2,
                       hidden_channels=num_hidden,
                       out_channels=2,
@@ -44,23 +70,17 @@ def test_save_embedding():
                                  batch_size,
                                  num_nano_batch=2,
                                  relabel_nodes=True)
-    # for nb in nano_batchs:
-    #     print(nb)
-    #     print(x[n_id][nb.n_id])
     histories = torch.nn.ModuleList(
         [History(len(n_id), num_hidden, 'cpu') for _ in range(num_layers - 1)])
-    nb = nano_batchs[1]
-    out = model(x[n_id][nb.n_id], nb.adjs, nb.n_id, histories)  # noqa
-    a = histories[0].emb
-    # print(a[2])
-    assert torch.equal(a[2], torch.tensor([0.0, 0.0]))  # node 6 don't save
-
-    histories[0].reset_parameters()
     nb = nano_batchs[0]
-    out = model(x[n_id][nb.n_id], nb.adjs, nb.n_id, histories)  # noqa
-    a = histories[0].emb
-    # print(a[3])
-    assert torch.equal(a[3], torch.tensor([0.0, 0.0]))  # node 2 don't save
+    model(x[n_id][nb.n_id], nb.adjs, nb.n_id, histories)  # noqa
+    assert torch.equal(histories[0].emb[3],
+                       torch.tensor([0.0, 0.0]))  # node 2 don't save
+    histories[0].reset_parameters()
+    nb = nano_batchs[1]
+    model(x[n_id][nb.n_id], nb.adjs, nb.n_id, histories)  # noqa
+    assert torch.equal(histories[0].emb[2],
+                       torch.tensor([0.0, 0.0]))  # node 6 don't save
 
 
 def test_prune():
