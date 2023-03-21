@@ -5,13 +5,6 @@ from torch_geometric.loader import NeighborSampler
 from microGNN.models import SAGE
 from microGNN.utils import get_nano_batch, slice_adj
 
-# yapf: disable
-edge_index = torch.tensor([
-    [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9], # noqa
-    [1, 6, 0, 2, 6, 1, 3, 7, 2, 4, 8, 3, 5, 9, 4, 9, 0, 1, 7, 2, 6, 8, 3, 7, 9, 4, 5, 8]],dtype=torch.long)  # noqa
-x = torch.tensor([[0, 0], [1, 1], [2, 2], [3, 3], [4, 4], [5, 5], [6, 6], # noqa
-                  [8, 3], [9, 3], [10, 3]],dtype=torch.float) # noqa
-# yapf: enable
 num_features, hidden_size, num_classes = 2, 16, 1
 
 
@@ -40,6 +33,34 @@ def test_slice_adj():
     assert subset.tolist() == [0, 6, 1, 5]
     assert edge_index.tolist() == [[2, 3], [0, 1]]
     assert edge_mask.tolist() == [True, False, False, True]
+
+
+def test_mapping():
+    edge_index = torch.tensor(
+        [
+            [0, 0, 1, 1, 2, 2, 6, 7],  # noqa
+            [1, 6, 0, 2, 7, 1, 0, 2]
+        ],
+        dtype=torch.long)  # noqa
+    hop = [-1, -1]
+    train_loader = NeighborSampler(
+        edge_index,
+        sizes=hop,
+        batch_size=2,
+        shuffle=False,
+        drop_last=True,
+    )
+    batch_size, n_id, adjs = next(iter(train_loader))
+    nano_batchs = get_nano_batch(adjs,
+                                 n_id,
+                                 batch_size,
+                                 num_nano_batch=2,
+                                 relabel_nodes=True)
+    assert nano_batchs[0].n_id.tolist() == [0, 1, 2, 3]
+    assert nano_batchs[1].n_id.tolist() == [1, 0, 3, 2,
+                                            4]  # noqa  是mini batch的node id
+    assert n_id[nano_batchs[0].n_id].tolist() == [0, 1, 6, 2]
+    assert n_id[nano_batchs[1].n_id].tolist() == [1, 0, 2, 6, 7]
 
 
 def test_get_nano_batch():
@@ -81,6 +102,13 @@ def test_get_nano_batch():
 
 
 def test_nano_batch():
+    # yapf: disable
+    edge_index = torch.tensor([
+        [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9], # noqa
+        [1, 6, 0, 2, 6, 1, 3, 7, 2, 4, 8, 3, 5, 9, 4, 9, 0, 1, 7, 2, 6, 8, 3, 7, 9, 4, 5, 8]],dtype=torch.long)  # noqa
+    x = torch.tensor([[0, 0], [1, 1], [2, 2], [3, 3], [4, 4], [5, 5], [6, 6], # noqa
+                    [8, 3], [9, 3], [10, 3]],dtype=torch.float) # noqa
+    # yapf: enable
     hop = [-1, -1, -1]  # three hop
     train_loader = NeighborSampler(
         edge_index,
@@ -148,5 +176,6 @@ def test_nano_batch():
 
 
 if __name__ == "__main__":
-    test_get_nano_batch()
+    # test_get_nano_batch()
+    test_mapping()
     # test_slice_adj()
