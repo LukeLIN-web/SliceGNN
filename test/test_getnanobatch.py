@@ -44,10 +44,10 @@ def test_slice_adj():
 
 def test_get_nano_batch():
     # yapf: disable
-    edge_index = torch.tensor([[0, 0, 1, 1, 2, 6], # noqa
-                           [1, 6, 0, 2, 1, 0]],dtype=torch.long)  # noqa
+    edge_index = torch.tensor([ [0, 0, 1, 1, 2, 2,6,7], # noqa
+                                [1, 6, 0, 2, 7,1, 0,2]],dtype=torch.long)  # noqa
     x = torch.tensor([[0, 0], [1, 1], [2, 2], [3, 3], [4, 4], [5, 5], [6, 6], # noqa
-                  [8, 3], [9, 3], [10, 3]],dtype=torch.float) # noqa
+                  [7, 7], [9, 3], [10, 3]],dtype=torch.float) # noqa
     # yapf: enable
     hop = [-1, -1]
     train_loader = NeighborSampler(
@@ -59,24 +59,25 @@ def test_get_nano_batch():
     )
 
     batch_size, n_id, adjs = next(iter(train_loader))
-    print(batch_size, n_id, adjs)
     nano_batchs = get_nano_batch(adjs,
                                  n_id,
                                  batch_size,
                                  num_nano_batch=2,
                                  relabel_nodes=True)
-    for nano_batch in nano_batchs:
-        print(nano_batch.adjs)
+    assert torch.equal(n_id, torch.tensor([0, 1, 6, 2, 7]))
     assert torch.equal(nano_batchs[0].n_id, torch.tensor([0, 1, 2, 3]))
-    assert torch.equal(nano_batchs[1].n_id, torch.tensor([1, 0, 3, 2]))
+    assert torch.equal(nano_batchs[1].n_id, torch.tensor([1, 0, 3, 2, 4]))
+    print(nano_batchs[1].adjs[0].edge_index)
+    print(x[n_id][nano_batchs[1].n_id])
     assert torch.equal(nano_batchs[1].adjs[0].edge_index,
-                       torch.tensor([[0, 3, 1, 2, 0], [1, 1, 0, 0, 2]]))
+                       torch.tensor([[0, 3, 1, 2, 0, 4], [1, 1, 0, 0, 2, 2]]))
     # TODO: [1,1] is not the target nodes, it is potential problem
     assert torch.equal(x[n_id][nano_batchs[0].n_id],
                        torch.tensor([[0., 0.], [1., 1.], [6., 6.], [2., 2.]]))
 
-    assert torch.equal(x[n_id][nano_batchs[1].n_id],
-                       torch.tensor([[1., 1.], [0., 0.], [2., 2.], [6., 6.]]))
+    assert torch.equal(
+        x[n_id][nano_batchs[1].n_id],
+        torch.tensor([[1., 1.], [0., 0.], [2., 2.], [6., 6.], [7., 7.]]))
 
 
 def test_nano_batch():
@@ -94,10 +95,10 @@ def test_nano_batch():
     for batch_size, n_id, adjs in train_loader:
         out = model(x[n_id], adjs)
         num_micro_batch = 4
-        micro_batchs = get_nano_batch(adjs, n_id, batch_size, num_micro_batch)
+        nano_batchs = get_nano_batch(adjs, n_id, batch_size, num_micro_batch)
         subgraphout = []
-        for micro_batch in micro_batchs:
-            subgraphout.append(model(x[n_id][micro_batch[0]], micro_batch[2]))
+        for nb in nano_batchs:
+            subgraphout.append(model(x[n_id][nb[0]], nb[2]))
         subgraphout = torch.cat(subgraphout, 0)
         assert torch.abs((out - subgraphout).mean()) < 0.01
 
@@ -116,10 +117,10 @@ def test_nano_batch():
     for batch_size, n_id, adjs in train_loader:
         out = model(x[n_id], adjs)
         num_micro_batch = 4
-        micro_batchs = get_nano_batch(adjs, n_id, batch_size, num_micro_batch)
+        nano_batchs = get_nano_batch(adjs, n_id, batch_size, num_micro_batch)
         subgraphout = []
-        for micro_batch in micro_batchs:
-            subgraphout.append(model(x[n_id][micro_batch[0]], micro_batch[2]))
+        for nb in nano_batchs:
+            subgraphout.append(model(x[n_id][nb[0]], nb[2]))
         subgraphout = torch.cat(subgraphout, 0)
         assert torch.abs((out - subgraphout).mean()) < 0.01
 
@@ -137,11 +138,11 @@ def test_nano_batch():
             # when hop = 1 , adjs is a EdgeIndex, we need convert it to list.
             adjs = [adjs]
         num_micro_batch = 2
-        micro_batchs = get_nano_batch(adjs, n_id, batch_size, num_micro_batch)
+        nano_batchs = get_nano_batch(adjs, n_id, batch_size, num_micro_batch)
         out = model(x[n_id], adjs)
         subgraphout = []
-        for micro_batch in micro_batchs:
-            subgraphout.append(model(x[n_id][micro_batch[0]], micro_batch[2]))
+        for nb in nano_batchs:
+            subgraphout.append(model(x[n_id][nb[0]], nb[2]))
         subgraphout = torch.cat(subgraphout, 0)
         assert torch.abs((out - subgraphout).mean()) < 0.01
 
