@@ -37,11 +37,7 @@ def test_slice_adj():
 
 def test_mapping():
     edge_index = torch.tensor(
-        [
-            [0, 0, 1, 1, 2, 2, 6, 7],  # noqa
-            [1, 6, 0, 2, 7, 1, 0, 2]
-        ],
-        dtype=torch.long)  # noqa
+        [[0, 0, 1, 1, 2, 2, 6, 7], [1, 6, 0, 2, 7, 1, 0, 2]], dtype=torch.long)
     hop = [-1, -1]
     train_loader = NeighborSampler(
         edge_index,
@@ -57,48 +53,12 @@ def test_mapping():
                                  num_nano_batch=2,
                                  relabel_nodes=True)
     assert nano_batchs[0].n_id.tolist() == [0, 1, 2, 3]
-    assert nano_batchs[1].n_id.tolist() == [1, 0, 3, 2,
-                                            4]  # noqa  是mini batch的node id
+    assert nano_batchs[1].n_id.tolist() == [1, 0, 3, 2, 4]
     assert n_id[nano_batchs[0].n_id].tolist() == [0, 1, 6, 2]
     assert n_id[nano_batchs[1].n_id].tolist() == [1, 0, 2, 6, 7]
-
-
-def test_get_nano_batch():
-    # yapf: disable
-    edge_index = torch.tensor([ [0, 0, 1, 1, 2, 2,6,7], # noqa
-                                [1, 6, 0, 2, 7,1, 0,2]],dtype=torch.long)  # noqa
-    x = torch.tensor([[0, 0], [1, 1], [2, 2], [3, 3], [4, 4], [5, 5], [6, 6], # noqa
-                  [7, 7], [9, 3], [10, 3]],dtype=torch.float) # noqa
-    # yapf: enable
-    hop = [-1, -1]
-    train_loader = NeighborSampler(
-        edge_index,
-        sizes=hop,
-        batch_size=2,
-        shuffle=False,
-        drop_last=True,
-    )
-
-    batch_size, n_id, adjs = next(iter(train_loader))
-    nano_batchs = get_nano_batch(adjs,
-                                 n_id,
-                                 batch_size,
-                                 num_nano_batch=2,
-                                 relabel_nodes=True)
-    assert torch.equal(n_id, torch.tensor([0, 1, 6, 2, 7]))
-    assert torch.equal(nano_batchs[0].n_id, torch.tensor([0, 1, 2, 3]))
-    assert torch.equal(nano_batchs[1].n_id, torch.tensor([1, 0, 3, 2, 4]))
-    print(nano_batchs[1].adjs[0].edge_index)
-    print(x[n_id][nano_batchs[1].n_id])
     assert torch.equal(nano_batchs[1].adjs[0].edge_index,
                        torch.tensor([[0, 3, 1, 2, 0, 4], [1, 1, 0, 0, 2, 2]]))
     # TODO: [1,1] is not the target nodes, it is potential problem
-    assert torch.equal(x[n_id][nano_batchs[0].n_id],
-                       torch.tensor([[0., 0.], [1., 1.], [6., 6.], [2., 2.]]))
-
-    assert torch.equal(
-        x[n_id][nano_batchs[1].n_id],
-        torch.tensor([[1., 1.], [0., 0.], [2., 2.], [6., 6.], [7., 7.]]))
 
 
 def test_nano_batch():
