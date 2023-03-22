@@ -66,9 +66,11 @@ class ScaleSAGE(ScalableGNN):
     ) -> Tensor:
         assert batch_size == 3
         assert torch.equal(n_id[:batch_size], torch.tensor([0, 1, 2]))
-        history.push(x[:batch_size], n_id[:batch_size])
-        # x有 0,1
         pull_node = n_id[history.cached_nodes[n_id]].squeeze()
         assert torch.equal(pull_node, torch.tensor([2]))
         x = history.pull(x, pull_node)
+        push_node = torch.masked_select(
+            n_id[:batch_size], ~torch.eq(n_id[:batch_size], pull_node))
+        assert torch.equal(push_node, torch.tensor([0, 1]))
+        history.push(x[push_node], push_node)
         return x

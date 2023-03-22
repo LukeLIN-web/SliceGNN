@@ -14,24 +14,29 @@ edge_index = torch.tensor([[0, 0, 1, 1, 2, 2, 6, 7],
 # yapf: enable
 
 
-def test_pull():
+def test_push_and_pull():
     history = History(5, 2, 'cpu')
     history.emb[2] = torch.tensor([2.2, 2.3])
     history.cached_nodes = torch.tensor([False, False, True, False, False])
     torch.manual_seed(0)
-    n_id = torch.tensor([0, 1, 2, 3, 4])
-    pull_node = n_id[history.cached_nodes[n_id]].squeeze()
-    print(pull_node)
+    n_id = torch.tensor([0, 1, 2, 3])
     edge_index = torch.tensor([[1, 2, 3], [0, 0, 1]])
     n_id = torch.tensor([0, 1, 2, 3, 4])
     x = torch.tensor([[1, 1],[2, 2],[3, 3],[4, 4],[5, 5],[6, 6],],dtype=torch.float) # yapf: disable
     x = x[n_id]
     conv = SAGEConv(2, 2, bias=False, root_weight=False)
+    batch_size = 3
     x_target = x[:3]  # Target nodes are always placed first.
     x = conv((x, x_target), edge_index)  # 得到 0 和 1的 embedding
+    pull_node = n_id[history.cached_nodes[n_id]].squeeze()
     assert torch.equal(x[2], torch.tensor([0.0, 0.0]))
-    x = history.pull(x, pull_node)
-    assert torch.equal(x[2], torch.tensor([2.2, 2.3]))
+    assert torch.equal(pull_node, torch.tensor(2))
+    out = history.pull(x, pull_node)  #pull 2
+    assert torch.equal(out[2], torch.tensor([2.2, 2.3]))
+    push_node = torch.masked_select(n_id[:batch_size],
+                                    ~torch.eq(n_id[:batch_size], pull_node))
+    assert torch.equal(push_node, torch.tensor([0, 1]))
+    history.push(x[push_node], push_node)
 
 
 # sample and then get nano batch,
@@ -116,4 +121,4 @@ if __name__ == "__main__":
     # test_prune()
     # test_save_embedding()
     # test_load_embedding()
-    test_pull()
+    test_push_and_pull()
