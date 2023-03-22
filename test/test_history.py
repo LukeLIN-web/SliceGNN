@@ -1,5 +1,6 @@
 import torch
 from torch_geometric.loader import NeighborSampler
+from torch_geometric.nn.conv import SAGEConv
 
 from microGNN import History
 from microGNN.models import ScaleSAGE
@@ -10,44 +11,77 @@ from microGNN.utils.common_class import Adj, Nanobatch
 # yapf: disable
 edge_index = torch.tensor([[0, 0, 1, 1, 2, 2, 6, 7],
                            [1, 6, 0, 2, 1, 7, 0, 2]], dtype=torch.long)
-
-x = torch.tensor([[0, 0], [1, 1], [2, 2], [3, 3], [4, 4], [5, 5], [6, 6], # noqa
-                  [8, 3], [9, 3], [10, 3]],dtype=torch.float) # noqa
 # yapf: enable
+
+
+def test_pull():
+    history = History(5, 2, 'cpu')
+    history.emb[2] = torch.tensor([2.2, 2.3])
+    history.cached_nodes = torch.tensor([False, False, True, False, False])
+    torch.manual_seed(0)
+    n_id = torch.tensor([0, 1, 2, 3, 4])
+    pull_node = n_id[history.cached_nodes[n_id]].squeeze()
+    print(pull_node)
+    edge_index = torch.tensor([[1, 2, 3], [0, 0, 1]])
+    n_id = torch.tensor([0, 1, 2, 3, 4])
+    x = torch.tensor(
+        [
+            [0, 0],
+            [1, 1],
+            [2, 2],
+            [3, 3],
+            [4, 4],
+            [5, 5],
+            [6, 6],  # noqa
+            [8, 3],
+            [9, 3],
+            [10, 3]
+        ],
+        dtype=torch.float)  # noqa
+    x = x[n_id]
+    print(x)
+    conv = SAGEConv(2, 2, bias=False, root_weight=False)
+    x_target = x[:3]  # Target nodes are always placed first.
+    x = conv((x, x_target), edge_index)  # 得到 0 和 1的 embedding
+    print(x)
+    assert torch.equal(x[2], torch.tensor([0.0, 0.0]))
+    x = history.pull(x, pull_node)
+    assert torch.equal(x[2], torch.tensor([2.2, 2.3]))
 
 
 # sample and then get nano batch,
 # then forward nano batch, get what node has be calculated ,return them.
-def test_load_embedding():
+def test_prune_computatition_graph():
     histories = torch.nn.ModuleList([History(5, 2, 'cpu') for _ in range(1)])
     histories[0].emb[3] = torch.tensor([3.2, 0.2])
     histories[0].emb[2] = torch.tensor([2.2, 2.3])
     histories[0].cached_nodes = torch.tensor([False, False, True, True, False])
     nb = Nanobatch(torch.tensor([0, 1, 2, 3, 4]), 5, [
-        Adj(torch.tensor([[1, 2, 3, 4], [0, 0, 1, 2]]), None, (5, )),
+        Adj(torch.tensor([[1, 2, 3, 4], [0, 0, 1, 2]]), None, (5, 3)),
         Adj(torch.tensor([[1, 2], [0, 0]]), None, (3, 1))
     ])
     pruned_adjs = prune_computation_graph(nb, histories)
     assert pruned_adjs[0].edge_index.tolist() == [[1, 2, 3], [0, 0, 1]]
     assert pruned_adjs[1].edge_index.tolist() == [[1, 2], [0, 0]]
-    torch.manual_seed(0)
-    hop = [-1, -1]
-    num_layers = len(hop)
-    num_hidden = 2
-    n_id = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7])
-    model = ScaleSAGE(in_channels=2,
-                      hidden_channels=num_hidden,
-                      out_channels=2,
-                      num_layers=num_layers)
-    x = torch.tensor([[0, 0], [1, 1], [2, 2], [3, 3], [4, 4]],
-                     dtype=torch.float)  # noqa
-    model.eval()
-    model(x, pruned_adjs, n_id, histories)
 
 
 # sample and then get nano batch,
 # then forward nano batch, save the embedding of the node in the nano batch
 def test_save_embedding():
+    x = torch.tensor(
+        [
+            [0, 0],
+            [1, 1],
+            [2, 2],
+            [3, 3],
+            [4, 4],
+            [5, 5],
+            [6, 6],  # noqa
+            [8, 3],
+            [9, 3],
+            [10, 3]
+        ],
+        dtype=torch.float)  # noqa
     hop = [-1, -1]
     num_layers = len(hop)
     train_loader = NeighborSampler(
@@ -108,5 +142,6 @@ def test_prune():
 
 if __name__ == "__main__":
     # test_prune()
-    test_save_embedding()
+    # test_save_embedding()
     # test_load_embedding()
+    test_pull()

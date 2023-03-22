@@ -23,6 +23,7 @@ class History(torch.nn.Module):
                                        dtype=torch.bool,
                                        device=device,
                                        pin_memory=pin_memory)
+        # eg. tensor([ True,  True,  True, False])
 
         self._device = torch.device("cpu")
 
@@ -38,12 +39,14 @@ class History(torch.nn.Module):
         return self
 
     @torch.no_grad()
-    def pull(self, n_id: Optional[Tensor] = None) -> Tensor:
-        out = self.emb
-        if n_id is not None:
-            assert n_id.device == self.emb.device
-            out = out.index_select(0, n_id)
-        return out.to(device=self._device)
+    def pull(self, x: Tensor, n_id: Optional[Tensor] = None) -> Tensor:
+        x[n_id] = self.emb[n_id].to(device=self._device)
+        return x
+        # out = self.emb
+        # if n_id is not None:
+        #     assert n_id.device == self.emb.device
+        #     out = out.index_select(0, n_id)
+        # return out.to(device=self._device)
 
     @torch.no_grad()
     def push(

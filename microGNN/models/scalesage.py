@@ -21,6 +21,7 @@ class ScaleSAGE(ScalableGNN):
         pool_size: Optional[int] = None,
         buffer_size: Optional[int] = None,
         device=None,
+        train=False,
     ):
         super().__init__(hidden_channels, num_layers, pool_size, buffer_size,
                          device)
@@ -43,44 +44,31 @@ class ScaleSAGE(ScalableGNN):
 
     # history [0] 1 hop, [1] 2 hop.
     def forward(self, x: Tensor, adjs: list, n_id: Tensor,
-                histories: History) -> Tensor:
+                histories: torch.nn.ModuleList) -> Tensor:
         for i, (edge_index, _, size) in enumerate(adjs):
-            # x = self.pull(histories[-i], x, n_id[:size[1]], size[1])
             x_target = x[:size[1]]  # Target nodes are always placed first.
             x = self.convs[i]((x, x_target), edge_index)
+            assert x.shape == (3, 2)
             if i != self.num_layers - 1:  # last layer is not saved
                 x = F.relu(x)
-                self.push(histories[-i], x, n_id[:size[1]], size[1])
+                x = self.push_and_pull(histories[-i], x, n_id[:size[1]],
+                                       size[1])
                 # require 前size[1]个节点是 next layer nodes
-                x = F.dropout(x, p=0.5, training=self.training)
+                # x = F.dropout(x, p=0.5, training=self.training)
         return x.log_softmax(dim=-1)
 
-    @torch.no_grad()
-    def inference(self, x_all, device, subgraph_loader):
-        for i in range(self.num_layers):
-            xs = []
-            for batch_size, n_id, adj in subgraph_loader:
-                edge_index, _, size = adj.to(device)
-                x = x_all[n_id].to(device)
-                x_target = x[:size[1]]
-                x = self.convs[i]((x, x_target), edge_index)
-                if i != self.num_layers - 1:
-                    x = F.relu(x)
-                xs.append(x)
-
-            x_all = torch.cat(xs, dim=0)
-
-        return x_all
-
-    def push(
+    def push_and_pull(
         self,
         history: History,
         x: Tensor,
         n_id: Tensor,
         batch_size: Optional[int] = None,
     ) -> Tensor:
-        if batch_size is None:
-            history.push(x, n_id)
-            return x
-        history.push(x[:batch_size],
-                     n_id[:batch_size])  # n_id 不应有6. 就是minibatch
+        assert batch_size == 3
+        assert torch.equal(n_id[:batch_size], torch.tensor([0, 1, 2]))
+        history.push(x[:batch_size], n_id[:batch_size])
+        # x有 0,1
+        pull_node = n_id[history.cached_nodes[n_id]].squeeze()
+        assert torch.equal(pull_node, torch.tensor([2]))
+        x = history.pull(x, pull_node)
+        return x

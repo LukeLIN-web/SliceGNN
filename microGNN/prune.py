@@ -3,12 +3,12 @@ from typing import List, Tuple
 import torch
 from torch import Tensor
 
-from microGNN import History
 from microGNN.utils import slice_adj
 from microGNN.utils.common_class import Adj, Nanobatch
 
 
-def prune_computation_graph(nb: Nanobatch, history: History) -> List[Adj]:
+def prune_computation_graph(nb: Nanobatch,
+                            history: torch.nn.ModuleList) -> List[Adj]:
     adjs = nb.adjs
     adjs.reverse()
     new_adjs = [adjs[0]]
