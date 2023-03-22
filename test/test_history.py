@@ -10,7 +10,7 @@ from microGNN.utils.common_class import Adj, Nanobatch
 
 # yapf: disable
 edge_index = torch.tensor([[0, 0, 1, 1, 2, 2, 6, 7],
-                           [1, 6, 0, 2, 1, 7, 0, 2]], dtype=torch.long)
+                           [1, 6, 0, 2, 1, 7, 0, 2]], dtype=torch.long) # noqa
 # yapf: enable
 
 
@@ -24,20 +24,16 @@ def test_pull():
     print(pull_node)
     edge_index = torch.tensor([[1, 2, 3], [0, 0, 1]])
     n_id = torch.tensor([0, 1, 2, 3, 4])
-    x = torch.tensor(
-        [
-            [0, 0],
-            [1, 1],
-            [2, 2],
-            [3, 3],
-            [4, 4],
-            [5, 5],
-            [6, 6],  # noqa
-            [8, 3],
-            [9, 3],
-            [10, 3]
-        ],
-        dtype=torch.float)  # noqa
+    x = torch.tensor([
+        [0, 0],
+        [1, 1],
+        [2, 2],
+        [3, 3],
+        [4, 4],
+        [5, 5],
+        [6, 6],
+    ],
+                     dtype=torch.float)
     x = x[n_id]
     print(x)
     conv = SAGEConv(2, 2, bias=False, root_weight=False)
@@ -68,20 +64,16 @@ def test_prune_computatition_graph():
 # sample and then get nano batch,
 # then forward nano batch, save the embedding of the node in the nano batch
 def test_save_embedding():
-    x = torch.tensor(
-        [
-            [0, 0],
-            [1, 1],
-            [2, 2],
-            [3, 3],
-            [4, 4],
-            [5, 5],
-            [6, 6],  # noqa
-            [8, 3],
-            [9, 3],
-            [10, 3]
-        ],
-        dtype=torch.float)  # noqa
+    x = torch.tensor([
+        [0, 0],
+        [1, 1],
+        [2, 2],
+        [3, 3],
+        [4, 4],
+        [5, 5],
+        [6, 6],
+    ],
+                     dtype=torch.float)
     hop = [-1, -1]
     num_layers = len(hop)
     train_loader = NeighborSampler(
