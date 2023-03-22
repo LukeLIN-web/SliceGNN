@@ -7,9 +7,10 @@ from microGNN.prune import prune, prune_computation_graph
 from microGNN.utils import get_nano_batch
 from microGNN.utils.common_class import Adj, Nanobatch
 
-edge_index = torch.tensor([[0, 0, 1, 1, 2, 2, 6, 7], [1, 6, 0, 2, 1, 7, 0, 2]],
-                          dtype=torch.long)  # noqa
 # yapf: disable
+edge_index = torch.tensor([[0, 0, 1, 1, 2, 2, 6, 7],
+                           [1, 6, 0, 2, 1, 7, 0, 2]], dtype=torch.long)
+
 x = torch.tensor([[0, 0], [1, 1], [2, 2], [3, 3], [4, 4], [5, 5], [6, 6], # noqa
                   [8, 3], [9, 3], [10, 3]],dtype=torch.float) # noqa
 # yapf: enable
@@ -19,8 +20,8 @@ x = torch.tensor([[0, 0], [1, 1], [2, 2], [3, 3], [4, 4], [5, 5], [6, 6], # noqa
 # then forward nano batch, get what node has be calculated ,return them.
 def test_load_embedding():
     histories = torch.nn.ModuleList([History(5, 2, 'cpu') for _ in range(1)])
-    histories[0].emb[3] = torch.tensor([3.0, 3.0])
-    histories[0].emb[2] = torch.tensor([2.0, 2.0])
+    histories[0].emb[3] = torch.tensor([3.2, 0.2])
+    histories[0].emb[2] = torch.tensor([2.2, 2.3])
     histories[0].cached_nodes = torch.tensor([False, False, True, True, False])
     nb = Nanobatch(torch.tensor([0, 1, 2, 3, 4]), 5, [
         Adj(torch.tensor([[1, 2, 3, 4], [0, 0, 1, 2]]), None, (5, )),
@@ -29,6 +30,19 @@ def test_load_embedding():
     pruned_adjs = prune_computation_graph(nb, histories)
     assert pruned_adjs[0].edge_index.tolist() == [[1, 2, 3], [0, 0, 1]]
     assert pruned_adjs[1].edge_index.tolist() == [[1, 2], [0, 0]]
+    torch.manual_seed(0)
+    hop = [-1, -1]
+    num_layers = len(hop)
+    num_hidden = 2
+    n_id = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7])
+    model = ScaleSAGE(in_channels=2,
+                      hidden_channels=num_hidden,
+                      out_channels=2,
+                      num_layers=num_layers)
+    x = torch.tensor([[0, 0], [1, 1], [2, 2], [3, 3], [4, 4]],
+                     dtype=torch.float)  # noqa
+    model.eval()
+    model(x, pruned_adjs, n_id, histories)
 
 
 # sample and then get nano batch,
@@ -44,6 +58,7 @@ def test_save_embedding():
         drop_last=True,
     )
     num_hidden = 2
+    torch.manual_seed(0)
     batch_size, n_id, adjs = next(iter(train_loader))
     model = ScaleSAGE(in_channels=2,
                       hidden_channels=num_hidden,
@@ -63,7 +78,6 @@ def test_save_embedding():
                        torch.tensor([0.0, 0.0]))  # node 2 don't save
     assert torch.equal(histories[0].cached_nodes,
                        torch.tensor([True, True, True, False, False]))
-
     histories[0].reset_parameters()
 
     nb = nano_batchs[1]
@@ -94,5 +108,5 @@ def test_prune():
 
 if __name__ == "__main__":
     # test_prune()
-    # test_save_embedding()
-    test_load_embedding()
+    test_save_embedding()
+    # test_load_embedding()
