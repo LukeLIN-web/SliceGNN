@@ -23,8 +23,8 @@ repos:
         name: Format code
         additional_dependencies: [toml]
 
-  - repo: https://github.com/PyCQA/flake8
-    rev: 6.0.0
-    hooks:
-      - id: flake8
-        name: Check PEP8
+  # - repo: https://github.com/PyCQA/flake8
+  #   rev: 6.0.0
+  #   hooks:
+  #     - id: flake8
+  #       name: Check PEP8

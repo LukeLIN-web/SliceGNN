@@ -32,14 +32,11 @@ def test_pull():
         [4, 4],
         [5, 5],
         [6, 6],
-    ],
-                     dtype=torch.float)
+    ],dtype=torch.float) # yapf: disable
     x = x[n_id]
-    print(x)
     conv = SAGEConv(2, 2, bias=False, root_weight=False)
     x_target = x[:3]  # Target nodes are always placed first.
     x = conv((x, x_target), edge_index)  # 得到 0 和 1的 embedding
-    print(x)
     assert torch.equal(x[2], torch.tensor([0.0, 0.0]))
     x = history.pull(x, pull_node)
     assert torch.equal(x[2], torch.tensor([2.2, 2.3]))
@@ -72,8 +69,7 @@ def test_save_embedding():
         [4, 4],
         [5, 5],
         [6, 6],
-    ],
-                     dtype=torch.float)
+    ],dtype=torch.float) # yapf: disable
     hop = [-1, -1]
     num_layers = len(hop)
     train_loader = NeighborSampler(
