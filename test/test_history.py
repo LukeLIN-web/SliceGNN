@@ -24,15 +24,7 @@ def test_pull():
     print(pull_node)
     edge_index = torch.tensor([[1, 2, 3], [0, 0, 1]])
     n_id = torch.tensor([0, 1, 2, 3, 4])
-    x = torch.tensor([
-        [0, 0],
-        [1, 1],
-        [2, 2],
-        [3, 3],
-        [4, 4],
-        [5, 5],
-        [6, 6],
-    ],dtype=torch.float) # yapf: disable
+    x = torch.tensor([[1, 1],[2, 2],[3, 3],[4, 4],[5, 5],[6, 6],],dtype=torch.float) # yapf: disable
     x = x[n_id]
     conv = SAGEConv(2, 2, bias=False, root_weight=False)
     x_target = x[:3]  # Target nodes are always placed first.
@@ -61,15 +53,7 @@ def test_prune_computatition_graph():
 # sample and then get nano batch,
 # then forward nano batch, save the embedding of the node in the nano batch
 def test_save_embedding():
-    x = torch.tensor([
-        [0, 0],
-        [1, 1],
-        [2, 2],
-        [3, 3],
-        [4, 4],
-        [5, 5],
-        [6, 6],
-    ],dtype=torch.float) # yapf: disable
+    x = torch.tensor([[1, 1],[2, 2],[3, 3],[4, 4],[5, 5],[6, 6],],dtype=torch.float) # yapf: disable
     hop = [-1, -1]
     num_layers = len(hop)
     train_loader = NeighborSampler(
