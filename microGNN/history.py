@@ -18,6 +18,11 @@ class History(torch.nn.Module):
                                embedding_dim,
                                device=device,
                                pin_memory=pin_memory)
+        self.cached_nodes = torch.full((num_embeddings, ),
+                                       False,
+                                       dtype=torch.bool,
+                                       device=device,
+                                       pin_memory=pin_memory)
 
         self._device = torch.device("cpu")
 
@@ -25,6 +30,7 @@ class History(torch.nn.Module):
 
     def reset_parameters(self):
         self.emb.fill_(0)
+        self.cached_nodes.fill_(False)  # 0 is a valid node id.
 
     def _apply(self, fn):
         # Set the `_device` of the module without transfering `self.emb`.
@@ -43,30 +49,15 @@ class History(torch.nn.Module):
     def push(
         self,
         x: Tensor,
-        n_id: Optional[Tensor] = None,
-        offset: Optional[Tensor] = None,
-        count: Optional[Tensor] = None,
+        n_id: Tensor,
     ):
 
         if n_id is None and x.size(0) != self.num_embeddings:
             raise ValueError
 
-        elif n_id is None and x.size(0) == self.num_embeddings:
-            self.emb.copy_(x)
-
-        elif offset is None or count is None:
-            assert n_id.device == self.emb.device
-            self.emb[n_id] = x.to(self.emb.device)
-
-        else:  # Push in chunks:
-            src_o = 0
-            x = x.to(self.emb.device)
-            for (
-                    dst_o,
-                    c,
-            ) in zip(offset.tolist(), count.tolist()):
-                self.emb[dst_o:dst_o + c] = x[src_o:src_o + c]
-                src_o += c
+        assert n_id.device == self.emb.device
+        self.emb[n_id] = x.to(self.emb.device)
+        self.cached_nodes[n_id] = True
 
     def forward(self, *args, **kwargs):
         """"""

@@ -41,14 +41,17 @@ class ScaleSAGE(ScalableGNN):
         for conv in self.convs:
             conv.reset_parameters()
 
+    # history [0] 1 hop, [1] 2 hop.
     def forward(self, x: Tensor, adjs: list, n_id: Tensor,
                 histories: History) -> Tensor:
         for i, (edge_index, _, size) in enumerate(adjs):
+            # x = self.pull(histories[-i], x, n_id[:size[1]], size[1])
             x_target = x[:size[1]]  # Target nodes are always placed first.
             x = self.convs[i]((x, x_target), edge_index)
-            if i != self.num_layers - 1:
+            if i != self.num_layers - 1:  # last layer is not saved
                 x = F.relu(x)
-                self.push(histories[i], x, n_id[:size[1]], size[1])
+                self.push(histories[-i], x, n_id[:size[1]], size[1])
+                # require 前size[1]个节点是 next layer nodes
                 x = F.dropout(x, p=0.5, training=self.training)
         return x.log_softmax(dim=-1)
 
@@ -76,7 +79,6 @@ class ScaleSAGE(ScalableGNN):
         n_id: Tensor,
         batch_size: Optional[int] = None,
     ) -> Tensor:
-
         if batch_size is None:
             history.push(x, n_id)
             return x

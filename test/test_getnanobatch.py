@@ -61,7 +61,7 @@ def test_mapping():
     # TODO: [1,1] is not the target nodes, it is potential problem
 
 
-def test_nano_batch():
+def test_forward():
     # yapf: disable
     edge_index = torch.tensor([
         [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 9], # noqa
@@ -136,6 +136,5 @@ def test_nano_batch():
 
 
 if __name__ == "__main__":
-    # test_get_nano_batch()
     test_mapping()
     # test_slice_adj()
