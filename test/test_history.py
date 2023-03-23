@@ -14,7 +14,7 @@ def test_save_and_load():
     hop = [-1, -1]
     num_layers = len(hop)
     num_hidden = 2
-    torch.manual_seed(0)
+    torch.manual_seed(23)
     mb_n_id = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7])
     edge1 = torch.tensor([[2, 3, 3, 4], [0, 0, 1, 1]])
     adjs1 = Adj(edge1, None, (5, 2))
@@ -35,9 +35,10 @@ def test_save_and_load():
         History(len(mb_n_id), num_hidden, 'cpu') for _ in range(num_layers - 1)
     ])
     nb = nano_batchs[0]
-    model(x[mb_n_id][nb.n_id], nb.adjs, nb.n_id, histories)
+    out = model(x[mb_n_id][nb.n_id], nb, histories)
+
     nb = nano_batchs[1]
-    model(x[mb_n_id][nb.n_id], nb.adjs, nb.n_id, histories)
+    out = model(x[mb_n_id][nb.n_id], nb, histories)
 
 
 def test_push_and_pull():
@@ -111,7 +112,7 @@ def test_save_embedding():
     histories = torch.nn.ModuleList(
         [History(len(n_id), num_hidden, 'cpu') for _ in range(num_layers - 1)])
     nb = nano_batchs[0]
-    model(x[n_id][nb.n_id], nb.adjs, nb.n_id, histories)
+    model(x[n_id][nb.n_id], nb, histories)
     assert torch.equal(histories[0].emb[3],
                        torch.tensor([0.0, 0.0]))  # node 2 don't save
     assert torch.equal(histories[0].cached_nodes,
@@ -119,7 +120,7 @@ def test_save_embedding():
     histories[0].reset_parameters()
 
     nb = nano_batchs[1]
-    model(x[n_id][nb.n_id], nb.adjs, nb.n_id, histories)
+    model(x[n_id][nb.n_id], nb, histories)
     assert torch.equal(histories[0].emb[2],
                        torch.tensor([0.0, 0.0]))  # node 6 don't save
     assert torch.equal(histories[0].cached_nodes,
@@ -146,7 +147,7 @@ def test_prune():
 
 if __name__ == "__main__":
     # test_prune()
-    test_save_embedding()
+    # test_save_embedding()
     # test_load_embedding()
     # test_push_and_pull()
-    # test_save_and_load()
+    test_save_and_load()
