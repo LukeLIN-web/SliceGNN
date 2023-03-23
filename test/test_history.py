@@ -8,10 +8,36 @@ from microGNN.prune import prune, prune_computation_graph
 from microGNN.utils import get_nano_batch
 from microGNN.utils.common_class import Adj, Nanobatch
 
-# yapf: disable
-edge_index = torch.tensor([[0, 0, 1, 1, 2, 2, 6, 7],
-                           [1, 6, 0, 2, 1, 7, 0, 2]], dtype=torch.long) # noqa
-# yapf: enable
+
+def test_save_and_load():
+    x = torch.tensor([[0,0],[1, 1],[2, 2],[3, 3],[4, 4],[5, 5],[6, 6],[7,7]],dtype=torch.float) # yapf: disable
+    hop = [-1, -1]
+    num_layers = len(hop)
+    num_hidden = 2
+    torch.manual_seed(0)
+    mb_n_id = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7])
+    edge1 = torch.tensor([[2, 3, 3, 4], [0, 0, 1, 1]])
+    adjs1 = Adj(edge1, None, (5, 2))
+    edge2 = torch.tensor([[2, 3, 3, 4, 5, 6, 7], [0, 0, 1, 1, 2, 3, 4]])
+    adjs2 = Adj(edge2, None, (8, 5))
+    adjs = [adjs2, adjs1]
+    model = ScaleSAGE(in_channels=2,
+                      hidden_channels=num_hidden,
+                      out_channels=2,
+                      num_layers=num_layers)
+    model.eval()
+    nano_batchs = get_nano_batch(adjs,
+                                 mb_n_id,
+                                 batch_size=2,
+                                 num_nano_batch=2,
+                                 relabel_nodes=True)
+    histories = torch.nn.ModuleList([
+        History(len(mb_n_id), num_hidden, 'cpu') for _ in range(num_layers - 1)
+    ])
+    nb = nano_batchs[0]
+    model(x[mb_n_id][nb.n_id], nb.adjs, nb.n_id, histories)
+    nb = nano_batchs[1]
+    model(x[mb_n_id][nb.n_id], nb.adjs, nb.n_id, histories)
 
 
 def test_push_and_pull():
@@ -21,7 +47,6 @@ def test_push_and_pull():
     torch.manual_seed(0)
     n_id = torch.tensor([0, 1, 2, 3])
     edge_index = torch.tensor([[1, 2, 3], [0, 0, 1]])
-    n_id = torch.tensor([0, 1, 2, 3, 4])
     x = torch.tensor([[1, 1],[2, 2],[3, 3],[4, 4],[5, 5],[6, 6],],dtype=torch.float) # yapf: disable
     x = x[n_id]
     conv = SAGEConv(2, 2, bias=False, root_weight=False)
@@ -31,12 +56,14 @@ def test_push_and_pull():
     pull_node = n_id[history.cached_nodes[n_id]].squeeze()
     assert torch.equal(x[2], torch.tensor([0.0, 0.0]))
     assert torch.equal(pull_node, torch.tensor(2))
-    out = history.pull(x, pull_node)  #pull 2
-    assert torch.equal(out[2], torch.tensor([2.2, 2.3]))
+    # out = history.pull(x, pull_node)
+    for i, id in enumerate(n_id[:batch_size]):
+        if history.cached_nodes[id] == True:
+            x[i] = history.emb[id]
+    assert torch.equal(x[2], torch.tensor([2.2, 2.3]))
     push_node = torch.masked_select(n_id[:batch_size],
                                     ~torch.eq(n_id[:batch_size], pull_node))
     assert torch.equal(push_node, torch.tensor([0, 1]))
-    history.push(x[push_node], push_node)
 
 
 def test_prune_computatition_graph():
@@ -53,9 +80,11 @@ def test_prune_computatition_graph():
     assert pruned_adjs[1].edge_index.tolist() == [[1, 2], [0, 0]]
 
 
-# sample and then get nano batch,
-# then forward nano batch, save the embedding of the node in the nano batch
 def test_save_embedding():
+    # yapf: disable
+    edge_index = torch.tensor([[0, 0, 1, 1, 2, 2, 6, 7],
+                               [1, 6, 0, 2, 1, 7, 0, 2]], dtype=torch.long) # noqa
+    # yapf: enable
     x = torch.tensor([[0,0],[1, 1],[2, 2],[3, 3],[4, 4],[5, 5],[6, 6],[7,7]],dtype=torch.float) # yapf: disable
     hop = [-1, -1]
     num_layers = len(hop)
@@ -120,3 +149,4 @@ if __name__ == "__main__":
     test_save_embedding()
     # test_load_embedding()
     # test_push_and_pull()
+    # test_save_and_load()

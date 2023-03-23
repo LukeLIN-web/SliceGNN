@@ -49,26 +49,16 @@ class ScaleSAGE(ScalableGNN):
             x_target = x[:size[1]]  # Target nodes are always placed first.
             x = self.convs[i]((x, x_target), edge_index)
             if i != self.num_layers - 1:  # last layer is not saved
-                x = F.relu(x)
-                x = self.push_and_pull(histories[-i], x, n_id[:size[1]],
-                                       size[1])
+                # x = F.relu(x)
+                history: History = histories[-i]
+                batch_size = size[1]
+                print("batch_size", batch_size)
+                print("n_id", n_id)
+                for i, id in enumerate(n_id[:batch_size]):
+                    if history.cached_nodes[id] == True:
+                        x[i] = history.emb[id]
+                print(" n_id [:batch_size]", n_id[:batch_size])
+                history.push(x, n_id[:batch_size])  # push 所有的, 包括刚刚pull的
                 # require 前size[1]个节点是 next layer nodes
                 # x = F.dropout(x, p=0.5, training=self.training)
         return x.log_softmax(dim=-1)
-
-    def push_and_pull(
-        self,
-        history: History,
-        x: Tensor,
-        n_id: Tensor,
-        batch_size: Optional[int] = None,
-    ) -> Tensor:
-        pull_node = n_id[history.cached_nodes[n_id]].squeeze()
-        x = history.pull(x, pull_node)
-        if pull_node.numel() == 0:
-            push_node = n_id[:batch_size]
-        else:
-            push_node = torch.masked_select(
-                n_id[:batch_size], ~torch.eq(n_id[:batch_size], pull_node))
-        history.push(x, push_node)
-        return x
