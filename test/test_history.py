@@ -39,8 +39,6 @@ def test_push_and_pull():
     history.push(x[push_node], push_node)
 
 
-# sample and then get nano batch,
-# then forward nano batch, get what node has be calculated ,return them.
 def test_prune_computatition_graph():
     histories = torch.nn.ModuleList([History(5, 2, 'cpu') for _ in range(1)])
     histories[0].emb[3] = torch.tensor([3.2, 0.2])
@@ -58,7 +56,7 @@ def test_prune_computatition_graph():
 # sample and then get nano batch,
 # then forward nano batch, save the embedding of the node in the nano batch
 def test_save_embedding():
-    x = torch.tensor([[1, 1],[2, 2],[3, 3],[4, 4],[5, 5],[6, 6],],dtype=torch.float) # yapf: disable
+    x = torch.tensor([[0,0],[1, 1],[2, 2],[3, 3],[4, 4],[5, 5],[6, 6],[7,7]],dtype=torch.float) # yapf: disable
     hop = [-1, -1]
     num_layers = len(hop)
     train_loader = NeighborSampler(
@@ -119,6 +117,6 @@ def test_prune():
 
 if __name__ == "__main__":
     # test_prune()
-    # test_save_embedding()
+    test_save_embedding()
     # test_load_embedding()
-    test_push_and_pull()
+    # test_push_and_pull()

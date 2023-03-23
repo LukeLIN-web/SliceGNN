@@ -48,7 +48,6 @@ class ScaleSAGE(ScalableGNN):
         for i, (edge_index, _, size) in enumerate(adjs):
             x_target = x[:size[1]]  # Target nodes are always placed first.
             x = self.convs[i]((x, x_target), edge_index)
-            assert x.shape == (3, 2)
             if i != self.num_layers - 1:  # last layer is not saved
                 x = F.relu(x)
                 x = self.push_and_pull(histories[-i], x, n_id[:size[1]],
@@ -64,13 +63,12 @@ class ScaleSAGE(ScalableGNN):
         n_id: Tensor,
         batch_size: Optional[int] = None,
     ) -> Tensor:
-        assert batch_size == 3
-        assert torch.equal(n_id[:batch_size], torch.tensor([0, 1, 2]))
         pull_node = n_id[history.cached_nodes[n_id]].squeeze()
-        assert torch.equal(pull_node, torch.tensor([2]))
         x = history.pull(x, pull_node)
-        push_node = torch.masked_select(
-            n_id[:batch_size], ~torch.eq(n_id[:batch_size], pull_node))
-        assert torch.equal(push_node, torch.tensor([0, 1]))
-        history.push(x[push_node], push_node)
+        if pull_node.numel() == 0:
+            push_node = n_id[:batch_size]
+        else:
+            push_node = torch.masked_select(
+                n_id[:batch_size], ~torch.eq(n_id[:batch_size], pull_node))
+        history.push(x, push_node)
         return x
