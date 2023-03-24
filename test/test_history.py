@@ -34,11 +34,12 @@ def test_save_and_load():
     histories = torch.nn.ModuleList([
         History(len(mb_n_id), num_hidden, 'cpu') for _ in range(num_layers - 1)
     ])
+
     nb = nano_batchs[0]
     out = model(x[mb_n_id][nb.n_id], nb, histories)
 
-    nb = nano_batchs[1]
-    out = model(x[mb_n_id][nb.n_id], nb, histories)
+    # nb = nano_batchs[1]
+    # out = model(x[mb_n_id][nb.n_id], nb, histories)
 
 
 def test_push_and_pull():
@@ -69,8 +70,6 @@ def test_push_and_pull():
 
 def test_prune_computatition_graph():
     histories = torch.nn.ModuleList([History(5, 2, 'cpu') for _ in range(1)])
-    histories[0].emb[3] = torch.tensor([3.2, 0.2])
-    histories[0].emb[2] = torch.tensor([2.2, 2.3])
     histories[0].cached_nodes = torch.tensor([False, False, True, True, False])
     nb = Nanobatch(torch.tensor([0, 1, 2, 3, 4]), 5, [
         Adj(torch.tensor([[1, 2, 3, 4], [0, 0, 1, 2]]), None, (5, 3)),
@@ -146,8 +145,8 @@ def test_prune():
 
 
 if __name__ == "__main__":
-    # test_prune()
+    test_prune_computatition_graph()
     # test_save_embedding()
     # test_load_embedding()
     # test_push_and_pull()
-    test_save_and_load()
+    # test_save_and_load()

@@ -49,30 +49,39 @@ class ScaleSAGE(ScalableGNN):
     def forward(self, x: Tensor, nb, histories: torch.nn.ModuleList) -> Tensor:
         n_id = nb.n_id
         adjs = nb.adjs
+        adjs.reverse()
         pruned_adjs = [adjs[0]]
-        layernode = nb.n_id[:nb.size]
+        layernode = nb.n_id[:adjs[0].size[0]]  # get 1hop nodes
         for i in range(1, len(adjs)):
             adj = adjs[i]
             # 如果hisotry 里面的cached_nodes 为true,则说明这个节点已经计算过了,不需要再计算了
-            sub_nid = layernode[histories[
-                i - 1].cached_nodes[layernode].logical_not()]  # 没有cached 的节点
-            print("sub_nid", sub_nid)
+            sub_nid = torch.empty(0, dtype=torch.long)
+            for j, id in enumerate(layernode):
+                if histories[i - 1].cached_nodes[id] == False:
+                    sub_nid = torch.cat((sub_nid, torch.tensor([j])))
             layernode, sub_adjs, edge_mask = slice_adj(sub_nid,
                                                        adj.edge_index,
                                                        relabel_nodes=False)
             pruned_adjs.append(
                 Adj(sub_adjs, None, (len(layernode), len(sub_nid))))
-        print("pruned_adjs", pruned_adjs)
+        pruned_adjs.reverse()
+        #pruned_adjs [Adj(edge_index=tensor([[3],
+        # [1]]), e_id=None, size=(3, 2)), Adj(edge_index=tensor([[1, 2],
+        # [0, 0]]), e_id=None, size=(3, 1))]
+        # 1hop的两条边不见了.
         for i, (edge_index, _, size) in enumerate(pruned_adjs):
             x_target = x[:size[1]]  # Target nodes are always placed first.
+            # print("x_target", x_target)
+            # print("edge_index", edge_index)
+            # print(x)
             x = self.convs[i]((x, x_target), edge_index)
             if i != self.num_layers - 1:  # last layer is not saved
                 x = F.relu(x)
                 history: History = histories[-i]
                 batch_size = size[1]
-                for i, id in enumerate(n_id[:batch_size]):
+                for j, id in enumerate(n_id[:batch_size]):
                     if history.cached_nodes[id] == True:
-                        x[i] = history.emb[id]
+                        x[j] = history.emb[id]
                         print("hit", id)
                 history.push(x, n_id[:batch_size])  # push 所有的, 包括刚刚pull的
                 # require 前size[1]个节点是 next layer nodes
