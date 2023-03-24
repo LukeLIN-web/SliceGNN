@@ -42,8 +42,6 @@ class History(torch.nn.Module):
     def pull(self, x: Tensor, n_id: Tensor) -> Tensor:
         for j, id in enumerate(n_id):
             if self.cached_nodes[id] == True:
-                assert j == 1
-                assert id == 3
                 x[j] = self.emb[id]
 
     @torch.no_grad()

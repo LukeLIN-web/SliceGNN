@@ -24,7 +24,6 @@ class ScaleSAGE(ScalableGNN):
         pool_size: Optional[int] = None,
         buffer_size: Optional[int] = None,
         device=None,
-        train=False,
     ):
         super().__init__(hidden_channels, num_layers, pool_size, buffer_size,
                          device)
@@ -45,21 +44,24 @@ class ScaleSAGE(ScalableGNN):
         for conv in self.convs:
             conv.reset_parameters()
 
-    # history [0] is 1 hop, [1] 2 hop.
+    # history [0] is outer hop, [1] inner hop, [-1] is 1hop
     def forward(self, x: Tensor, nb, histories: torch.nn.ModuleList) -> Tensor:
         pruned_adjs = prune_computation_graph(nb, histories)
         for i, (edge_index, _, size) in enumerate(pruned_adjs):
-            x_target = x[:size[1]]  # Target nodes are always placed first.
-            x = self.convs[i]((x, x_target), edge_index)
+            h = self.convs[i](
+                x, edge_index)  # compute the non cached nodes embedding
+            non_empty_indices = (h != 0).nonzero()
+            x[non_empty_indices] = h[non_empty_indices]
             if i != self.num_layers - 1:  # last layer is not saved
                 x = F.relu(x)
-                history = histories[-i]
-                batch_size = size[1]
-                for j, id in enumerate(nb.n_id[:batch_size]):
-                    if history.cached_nodes[id] == True:
-                        x[j] = history.emb[id]
-                        print("hit", id)
-                history.push(x, nb.n_id[:batch_size])  # push 所有的, 包括刚刚pull的
+                history = histories[i]
+                batch_size = nb.adjs[i].size[
+                    1]  # require 前size[0]个节点是 layer nodes
+                history.pull(x, nb.n_id[:batch_size])
+                history.push(
+                    x[:batch_size],
+                    nb.n_id[:batch_size])  # Push all, including just pulled.
                 # require 前size[1]个节点是 next layer nodes
                 x = F.dropout(x, p=0.5, training=self.training)
+        x = x[:nb.adjs[-1].size[1]]
         return x.log_softmax(dim=-1)

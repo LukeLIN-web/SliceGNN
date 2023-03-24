@@ -86,7 +86,7 @@ def test_forward():
         nano_batchs = get_nano_batch(adjs, n_id, batch_size, num_micro_batch)
         subgraphout = []
         for nb in nano_batchs:
-            subgraphout.append(model(x[n_id][nb[0]], nb[2]))
+            subgraphout.append(model(x[n_id][nb.n_id], nb.adjs))
         subgraphout = torch.cat(subgraphout, 0)
         assert torch.abs((out - subgraphout).mean()) < 0.01
 
@@ -108,7 +108,7 @@ def test_forward():
         nano_batchs = get_nano_batch(adjs, n_id, batch_size, num_micro_batch)
         subgraphout = []
         for nb in nano_batchs:
-            subgraphout.append(model(x[n_id][nb[0]], nb[2]))
+            subgraphout.append(model(x[n_id][nb.n_id], nb.adjs))
         subgraphout = torch.cat(subgraphout, 0)
         assert torch.abs((out - subgraphout).mean()) < 0.01
 
@@ -130,7 +130,7 @@ def test_forward():
         out = model(x[n_id], adjs)
         subgraphout = []
         for nb in nano_batchs:
-            subgraphout.append(model(x[n_id][nb[0]], nb[2]))
+            subgraphout.append(model(x[n_id][nb.n_id], nb.adjs))
         subgraphout = torch.cat(subgraphout, 0)
         assert torch.abs((out - subgraphout).mean()) < 0.01
 

@@ -1,3 +1,4 @@
+import copy
 from typing import List, Tuple
 
 import torch
@@ -9,7 +10,7 @@ from microGNN.utils.common_class import Adj, Nanobatch
 
 def prune_computation_graph(nb: Nanobatch,
                             histories: torch.nn.ModuleList) -> List[Adj]:
-    adjs = nb.adjs
+    adjs = copy.deepcopy(nb.adjs)
     adjs.reverse()
     pruned_adjs = [adjs[0]]
     layernode = nb.n_id[:adjs[0].size[0]]  # get 1 hop nodes
