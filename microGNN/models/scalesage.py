@@ -47,43 +47,23 @@ class ScaleSAGE(ScalableGNN):
 
     # history [0] is 1 hop, [1] 2 hop.
     def forward(self, x: Tensor, nb, histories: torch.nn.ModuleList) -> Tensor:
-        n_id = nb.n_id
-        adjs = nb.adjs
-        adjs.reverse()
-        pruned_adjs = [adjs[0]]
-        layernode = nb.n_id[:adjs[0].size[0]]  # get 1hop nodes
-        for i in range(1, len(adjs)):
-            adj = adjs[i]
-            # 如果hisotry 里面的cached_nodes 为true,则说明这个节点已经计算过了,不需要再计算了
-            sub_nid = torch.empty(0, dtype=torch.long)
-            for j, id in enumerate(layernode):
-                if histories[i - 1].cached_nodes[id] == False:
-                    sub_nid = torch.cat((sub_nid, torch.tensor([j])))
-            layernode, sub_adjs, edge_mask = slice_adj(sub_nid,
-                                                       adj.edge_index,
-                                                       relabel_nodes=False)
-            pruned_adjs.append(
-                Adj(sub_adjs, None, (len(layernode), len(sub_nid))))
-        pruned_adjs.reverse()
+        pruned_adjs = prune_computation_graph(nb, histories)
         #pruned_adjs [Adj(edge_index=tensor([[3],
         # [1]]), e_id=None, size=(3, 2)), Adj(edge_index=tensor([[1, 2],
         # [0, 0]]), e_id=None, size=(3, 1))]
         # 1hop的两条边不见了.
         for i, (edge_index, _, size) in enumerate(pruned_adjs):
             x_target = x[:size[1]]  # Target nodes are always placed first.
-            # print("x_target", x_target)
-            # print("edge_index", edge_index)
-            # print(x)
             x = self.convs[i]((x, x_target), edge_index)
             if i != self.num_layers - 1:  # last layer is not saved
                 x = F.relu(x)
                 history: History = histories[-i]
                 batch_size = size[1]
-                for j, id in enumerate(n_id[:batch_size]):
+                for j, id in enumerate(nb.n_id[:batch_size]):
                     if history.cached_nodes[id] == True:
                         x[j] = history.emb[id]
                         print("hit", id)
-                history.push(x, n_id[:batch_size])  # push 所有的, 包括刚刚pull的
+                history.push(x, nb.n_id[:batch_size])  # push 所有的, 包括刚刚pull的
                 # require 前size[1]个节点是 next layer nodes
                 x = F.dropout(x, p=0.5, training=self.training)
         return x.log_softmax(dim=-1)
