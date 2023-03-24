@@ -9,18 +9,26 @@ from microGNN.utils import get_nano_batch
 from microGNN.utils.common_class import Adj, Nanobatch
 
 
-def test_save_and_load():
+def test_history_function():
     x = torch.tensor([[0,0],[1, 1],[2, 2],[3, 3],[4, 4],[5, 5],[6, 6],[7,7]],dtype=torch.float) # yapf: disable
-    num_layers = 2
-    hidden_channels = 2
-    mb_n_id = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7])
+    mb_n_id = torch.arange(8)
     edge1 = torch.tensor([[2, 3, 3, 4], [0, 0, 1, 1]])
     adjs1 = Adj(edge1, None, (5, 2))
     edge2 = torch.tensor([[2, 3, 3, 4, 5, 6, 7], [0, 0, 1, 1, 2, 3, 4]])
     adjs2 = Adj(edge2, None, (8, 5))
     adjs = [adjs2, adjs1]
+
+    torch.manual_seed(23)
+    num_layers = 2
+    hidden_channels = 2
     in_channels = 2
     out_channels = 2
+    convs = torch.nn.ModuleList()
+    convs.append(
+        SAGEConv(in_channels, hidden_channels, root_weight=False, bias=False))
+    convs.append(
+        SAGEConv(hidden_channels, out_channels, root_weight=False, bias=False))
+
     nano_batchs = get_nano_batch(adjs,
                                  mb_n_id,
                                  batch_size=2,
@@ -30,17 +38,10 @@ def test_save_and_load():
         History(len(mb_n_id), hidden_channels, 'cpu')
         for _ in range(num_layers - 1)
     ])
-
     histories[0].cached_nodes = torch.tensor(
-        [False, False, True, True, False, False, False, False])
+        [False, False, False, True, False, False, False, False])
     histories[0].emb[3] = torch.tensor([3.3, 3.4])  # should be pull
     nb = nano_batchs[1]
-    torch.manual_seed(23)
-    convs = torch.nn.ModuleList()
-    convs.append(
-        SAGEConv(in_channels, hidden_channels, root_weight=False, bias=False))
-    convs.append(
-        SAGEConv(hidden_channels, out_channels, root_weight=False, bias=False))
     pruned_adjs = prune_computation_graph(nb, histories)
     x = x[mb_n_id][nb.n_id]
     for i, (edge_index, _, size) in enumerate(pruned_adjs):
@@ -49,16 +50,69 @@ def test_save_and_load():
         x[non_empty_indices] = h[non_empty_indices]
         if i != num_layers - 1:  # last layer is not saved
             history = histories[-i]
-            batch_size = nb.adjs[i].size[0]  # nano batch adjs
+            batch_size = nb.adjs[i].size[0]  # require 前size[0]个节点是 layer nodes
+            history.pull(x, nb.n_id[:batch_size])
+            history.push(x[:batch_size], nb.n_id[:batch_size]
+                         )  # Push all, including the ones just pulled.
+            assert torch.equal(
+                history.cached_nodes,
+                torch.tensor(
+                    [False, True, False, True, True, False, False, False]))
+
+
+def test_save_and_load():
+    x = torch.tensor([[0,0],[1, 1],[2, 2],[3, 3],[4, 4],[5, 5],[6, 6],[7,7]],dtype=torch.float) # yapf: disable
+    mb_n_id = torch.arange(8)
+    edge1 = torch.tensor([[2, 3, 3, 4], [0, 0, 1, 1]])
+    adjs1 = Adj(edge1, None, (5, 2))
+    edge2 = torch.tensor([[2, 3, 3, 4, 5, 6, 7], [0, 0, 1, 1, 2, 3, 4]])
+    adjs2 = Adj(edge2, None, (8, 5))
+    adjs = [adjs2, adjs1]
+
+    torch.manual_seed(23)
+    num_layers = 2
+    hidden_channels = 2
+    in_channels = 2
+    out_channels = 2
+    convs = torch.nn.ModuleList()
+    convs.append(
+        SAGEConv(in_channels, hidden_channels, root_weight=False, bias=False))
+    convs.append(
+        SAGEConv(hidden_channels, out_channels, root_weight=False, bias=False))
+
+    nano_batchs = get_nano_batch(adjs,
+                                 mb_n_id,
+                                 batch_size=2,
+                                 num_nano_batch=2,
+                                 relabel_nodes=True)
+    histories = torch.nn.ModuleList([
+        History(len(mb_n_id), hidden_channels, 'cpu')
+        for _ in range(num_layers - 1)
+    ])
+    histories[0].cached_nodes = torch.tensor(
+        [False, False, False, True, False, False, False, False])
+    histories[0].emb[3] = torch.tensor([3.3, 3.4])  # should be pull
+    nb = nano_batchs[1]
+    pruned_adjs = prune_computation_graph(nb, histories)
+    x = x[mb_n_id][nb.n_id]
+    for i, (edge_index, _, size) in enumerate(pruned_adjs):
+        h = convs[i](x, edge_index)  # compute the non cached nodes embedding
+        non_empty_indices = (h != 0).nonzero()
+        x[non_empty_indices] = h[non_empty_indices]
+        if i != num_layers - 1:  # last layer is not saved
+            history = histories[-i]
+            batch_size = nb.adjs[i].size[0]  # require 前size[0]个节点是 layer nodes
             for j, id in enumerate(nb.n_id[:batch_size]):
                 if history.cached_nodes[id] == True:
                     assert j == 1
                     assert id == 3
                     x[j] = history.emb[id]
-            history.emb[
-                nb.n_id[:batch_size]] = x[:batch_size]  # push 所有的, 包括刚刚pull的
-            history.cached_nodes[nb.n_id[:batch_size]] = True
-            # require 前size[1]个节点是 next layer nodes
+            history.push(x[:batch_size], nb.n_id[:batch_size]
+                         )  # Push all, including the ones just pulled.
+            assert torch.equal(
+                history.cached_nodes,
+                torch.tensor(
+                    [False, True, False, True, True, False, False, False]))
 
 
 def test_push_and_pull():
@@ -66,18 +120,17 @@ def test_push_and_pull():
     history.emb[2] = torch.tensor([2.2, 2.3])
     history.cached_nodes = torch.tensor([False, False, True, False, False])
     torch.manual_seed(0)
-    n_id = torch.tensor([0, 1, 2, 3])
+    n_id = torch.arange(5)
     edge_index = torch.tensor([[1, 2, 3], [0, 0, 1]])
     x = torch.tensor([[1, 1],[2, 2],[3, 3],[4, 4],[5, 5],[6, 6],],dtype=torch.float) # yapf: disable
     x = x[n_id]
     conv = SAGEConv(2, 2, bias=False, root_weight=False)
     batch_size = 3
-    x_target = x[:3]  # Target nodes are always placed first.
+    x_target = x[:batch_size]  # Target nodes are always placed first.
     x = conv((x, x_target), edge_index)  # 得到 0 和 1的 embedding
     pull_node = n_id[history.cached_nodes[n_id]].squeeze()
     assert torch.equal(x[2], torch.tensor([0.0, 0.0]))
     assert torch.equal(pull_node, torch.tensor(2))
-    # out = history.pull(x, pull_node)
     for i, id in enumerate(n_id[:batch_size]):
         if history.cached_nodes[id] == True:
             x[i] = history.emb[id]
@@ -90,7 +143,7 @@ def test_push_and_pull():
 def test_prune_computatition_graph():
     histories = torch.nn.ModuleList([History(5, 2, 'cpu') for _ in range(1)])
     histories[0].cached_nodes = torch.tensor([False, False, True, True, False])
-    nb = Nanobatch(torch.tensor([0, 1, 2, 3, 4]), 5, [
+    nb = Nanobatch(torch.arange(5), 5, [
         Adj(torch.tensor([[1, 2, 3, 4], [0, 0, 1, 2]]), None, (5, 3)),
         Adj(torch.tensor([[1, 2], [0, 0]]), None, (3, 1))
     ])
@@ -98,7 +151,7 @@ def test_prune_computatition_graph():
     assert pruned_adjs[0].edge_index.tolist() == [[1, 2, 3], [0, 0, 1]]
     assert pruned_adjs[1].edge_index.tolist() == [[1, 2], [0, 0]]
 
-    mb_n_id = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7])
+    mb_n_id = torch.arange(8)
     edge1 = torch.tensor([[2, 3, 3, 4], [0, 0, 1, 1]])
     adjs1 = Adj(edge1, None, (5, 2))
     edge2 = torch.tensor([[2, 3, 3, 4, 5, 6, 7], [0, 0, 1, 1, 2, 3, 4]])

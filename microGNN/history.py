@@ -38,15 +38,13 @@ class History(torch.nn.Module):
         self._device = fn(torch.zeros(1)).device
         return self
 
-    # @torch.no_grad()
-    # def pull(self, x: Tensor, mask: Tensor) -> Tensor:
-    #     x[n_id] = self.emb[mask].to(device=self._device)
-    #     return x
-    #     # out = self.emb
-    #     # if n_id is not None:
-    #     #     assert n_id.device == self.emb.device
-    #     #     out = out.index_select(0, n_id)
-    #     # return out.to(device=self._device)
+    @torch.no_grad()
+    def pull(self, x: Tensor, n_id: Tensor) -> Tensor:
+        for j, id in enumerate(n_id):
+            if self.cached_nodes[id] == True:
+                assert j == 1
+                assert id == 3
+                x[j] = self.emb[id]
 
     @torch.no_grad()
     def push(
