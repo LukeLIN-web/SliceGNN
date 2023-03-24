@@ -16,9 +16,7 @@ def prune_computation_graph(nb: Nanobatch,
     for i in range(1, len(adjs)):
         adj = adjs[i]
         sub_nid = torch.empty(0, dtype=torch.long)
-        # 如果hisotry 里面的cached_nodes 为true,则说明这个节点已经计算过了,不需要再计算了
-        # store j instead of id,因为id 是mini batch的id, j是在nano batch里面的id
-        layer_idx = torch.arange(len(layernode))
+        layer_idx = torch.arange(len(layernode))  # nano batch id
         cached_nodes_mask = histories[i - 1].cached_nodes[layernode]
         sub_nid = layer_idx[~cached_nodes_mask]
         layernode, sub_adjs, edge_mask = slice_adj(sub_nid,

@@ -48,16 +48,12 @@ class ScaleSAGE(ScalableGNN):
     # history [0] is 1 hop, [1] 2 hop.
     def forward(self, x: Tensor, nb, histories: torch.nn.ModuleList) -> Tensor:
         pruned_adjs = prune_computation_graph(nb, histories)
-        #pruned_adjs [Adj(edge_index=tensor([[3],
-        # [1]]), e_id=None, size=(3, 2)), Adj(edge_index=tensor([[1, 2],
-        # [0, 0]]), e_id=None, size=(3, 1))]
-        # 1hop的两条边不见了.
         for i, (edge_index, _, size) in enumerate(pruned_adjs):
             x_target = x[:size[1]]  # Target nodes are always placed first.
             x = self.convs[i]((x, x_target), edge_index)
             if i != self.num_layers - 1:  # last layer is not saved
                 x = F.relu(x)
-                history: History = histories[-i]
+                history = histories[-i]
                 batch_size = size[1]
                 for j, id in enumerate(nb.n_id[:batch_size]):
                     if history.cached_nodes[id] == True:

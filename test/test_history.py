@@ -11,35 +11,54 @@ from microGNN.utils.common_class import Adj, Nanobatch
 
 def test_save_and_load():
     x = torch.tensor([[0,0],[1, 1],[2, 2],[3, 3],[4, 4],[5, 5],[6, 6],[7,7]],dtype=torch.float) # yapf: disable
-    hop = [-1, -1]
-    num_layers = len(hop)
-    num_hidden = 2
-    torch.manual_seed(23)
+    num_layers = 2
+    hidden_channels = 2
     mb_n_id = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7])
     edge1 = torch.tensor([[2, 3, 3, 4], [0, 0, 1, 1]])
     adjs1 = Adj(edge1, None, (5, 2))
     edge2 = torch.tensor([[2, 3, 3, 4, 5, 6, 7], [0, 0, 1, 1, 2, 3, 4]])
     adjs2 = Adj(edge2, None, (8, 5))
     adjs = [adjs2, adjs1]
-    model = ScaleSAGE(in_channels=2,
-                      hidden_channels=num_hidden,
-                      out_channels=2,
-                      num_layers=num_layers)
-    model.eval()
+    in_channels = 2
+    out_channels = 2
     nano_batchs = get_nano_batch(adjs,
                                  mb_n_id,
                                  batch_size=2,
                                  num_nano_batch=2,
                                  relabel_nodes=True)
     histories = torch.nn.ModuleList([
-        History(len(mb_n_id), num_hidden, 'cpu') for _ in range(num_layers - 1)
+        History(len(mb_n_id), hidden_channels, 'cpu')
+        for _ in range(num_layers - 1)
     ])
 
-    nb = nano_batchs[0]
-    out = model(x[mb_n_id][nb.n_id], nb, histories)
-
-    # nb = nano_batchs[1]
-    # out = model(x[mb_n_id][nb.n_id], nb, histories)
+    histories[0].cached_nodes = torch.tensor(
+        [False, False, True, True, False, False, False, False])
+    histories[0].emb[3] = torch.tensor([3.3, 3.4])  # should be pull
+    nb = nano_batchs[1]
+    torch.manual_seed(23)
+    convs = torch.nn.ModuleList()
+    convs.append(
+        SAGEConv(in_channels, hidden_channels, root_weight=False, bias=False))
+    convs.append(
+        SAGEConv(hidden_channels, out_channels, root_weight=False, bias=False))
+    pruned_adjs = prune_computation_graph(nb, histories)
+    x = x[mb_n_id][nb.n_id]
+    for i, (edge_index, _, size) in enumerate(pruned_adjs):
+        h = convs[i](x, edge_index)  # compute the non cached nodes embedding
+        non_empty_indices = (h != 0).nonzero()
+        x[non_empty_indices] = h[non_empty_indices]
+        if i != num_layers - 1:  # last layer is not saved
+            history = histories[-i]
+            batch_size = nb.adjs[i].size[0]  # nano batch adjs
+            for j, id in enumerate(nb.n_id[:batch_size]):
+                if history.cached_nodes[id] == True:
+                    assert j == 1
+                    assert id == 3
+                    x[j] = history.emb[id]
+            history.emb[
+                nb.n_id[:batch_size]] = x[:batch_size]  # push 所有的, 包括刚刚pull的
+            history.cached_nodes[nb.n_id[:batch_size]] = True
+            # require 前size[1]个节点是 next layer nodes
 
 
 def test_push_and_pull():
@@ -77,6 +96,27 @@ def test_prune_computatition_graph():
     ])
     pruned_adjs = prune_computation_graph(nb, histories)
     assert pruned_adjs[0].edge_index.tolist() == [[1, 2, 3], [0, 0, 1]]
+    assert pruned_adjs[1].edge_index.tolist() == [[1, 2], [0, 0]]
+
+    mb_n_id = torch.tensor([0, 1, 2, 3, 4, 5, 6, 7])
+    edge1 = torch.tensor([[2, 3, 3, 4], [0, 0, 1, 1]])
+    adjs1 = Adj(edge1, None, (5, 2))
+    edge2 = torch.tensor([[2, 3, 3, 4, 5, 6, 7], [0, 0, 1, 1, 2, 3, 4]])
+    adjs2 = Adj(edge2, None, (8, 5))
+    adjs = [adjs2, adjs1]
+    nano_batchs = get_nano_batch(adjs,
+                                 mb_n_id,
+                                 batch_size=2,
+                                 num_nano_batch=2,
+                                 relabel_nodes=True)
+    histories = torch.nn.ModuleList(
+        [History(len(mb_n_id), 2, 'cpu') for _ in range(1)])
+    nb = nano_batchs[1]
+    assert nb.n_id.tolist() == [1, 3, 4, 6, 7]
+    histories[0].cached_nodes = torch.tensor(
+        [False, False, True, True, False, False, False, False])
+    pruned_adjs = prune_computation_graph(nb, histories)
+    assert pruned_adjs[0].edge_index.tolist() == [[1, 2, 4], [0, 0, 2]]
     assert pruned_adjs[1].edge_index.tolist() == [[1, 2], [0, 0]]
 
 
@@ -145,8 +185,8 @@ def test_prune():
 
 
 if __name__ == "__main__":
-    test_prune_computatition_graph()
+    # test_prune_computatition_graph()
     # test_save_embedding()
     # test_load_embedding()
     # test_push_and_pull()
-    # test_save_and_load()
+    test_save_and_load()
