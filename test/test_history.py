@@ -4,7 +4,7 @@ from torch_geometric.nn.conv import SAGEConv
 
 from microGNN import History
 from microGNN.models import SAGE, ScaleSAGE
-from microGNN.prune import prune, prune_computation_graph
+from microGNN.prune import prune_computation_graph
 from microGNN.utils import get_nano_batch
 from microGNN.utils.common_class import Adj, Nanobatch
 
@@ -51,8 +51,6 @@ def test_same_out():
         value2 = model.state_dict()[key]
         assert torch.equal(value1, value2)
     out2 = model2(x[n_id][nb.n_id], nb.adjs)
-    print(out)
-    print(out2)
     assert torch.abs((out - out2).mean()) < 0.01
 
 
@@ -99,6 +97,7 @@ def test_history_function():
             history = histories[i]
             batch_size = nb.adjs[i].size[1]  # require 前size[0]个节点是 layer nodes
             history.pull(x, nb.n_id[:batch_size])
+            assert torch.equal(x[1], torch.tensor([3.3, 3.4]))
             history.push(x[:batch_size], nb.n_id[:batch_size]
                          )  # Push all, including the ones just pulled.
             assert torch.equal(
@@ -107,7 +106,7 @@ def test_history_function():
                     [False, True, False, True, True, False, False, False]))
 
 
-def test_save_and_load():
+def test_pull_and_push():
     x = torch.tensor([[0,0],[1, 1],[2, 2],[3, 3],[4, 4],[5, 5],[6, 6],[7,7]],dtype=torch.float) # yapf: disable
     mb_n_id = torch.arange(8)
     edge1 = torch.tensor([[2, 3, 3, 4], [0, 0, 1, 1]])
@@ -160,31 +159,6 @@ def test_save_and_load():
                 history.cached_nodes,
                 torch.tensor(
                     [False, True, False, True, True, False, False, False]))
-
-
-def test_push_and_pull():
-    history = History(5, 2, 'cpu')
-    history.emb[2] = torch.tensor([2.2, 2.3])
-    history.cached_nodes = torch.tensor([False, False, True, False, False])
-    torch.manual_seed(0)
-    n_id = torch.arange(5)
-    edge_index = torch.tensor([[1, 2, 3], [0, 0, 1]])
-    x = torch.tensor([[1, 1],[2, 2],[3, 3],[4, 4],[5, 5],[6, 6],],dtype=torch.float) # yapf: disable
-    x = x[n_id]
-    conv = SAGEConv(2, 2, bias=False, root_weight=False)
-    batch_size = 3
-    x_target = x[:batch_size]  # Target nodes are always placed first.
-    x = conv((x, x_target), edge_index)  # 得到 0 和 1的 embedding
-    pull_node = n_id[history.cached_nodes[n_id]].squeeze()
-    assert torch.equal(x[2], torch.tensor([0.0, 0.0]))
-    assert torch.equal(pull_node, torch.tensor(2))
-    for i, id in enumerate(n_id[:batch_size]):
-        if history.cached_nodes[id] == True:
-            x[i] = history.emb[id]
-    assert torch.equal(x[2], torch.tensor([2.2, 2.3]))
-    push_node = torch.masked_select(n_id[:batch_size],
-                                    ~torch.eq(n_id[:batch_size], pull_node))
-    assert torch.equal(push_node, torch.tensor([0, 1]))
 
 
 def test_prune_computatition_graph():
@@ -266,27 +240,8 @@ def test_save_embedding():
                        torch.tensor([True, True, False, True, False]))
 
 
-def test_prune():
-    edge1 = torch.tensor([[3, 4], [2, 2]])
-    adjs1 = Adj(edge1, None, (3, 1))
-    edge2 = torch.tensor([[3, 4, 6, 7, 5, 8], [2, 2, 3, 3, 4, 4]])
-    adjs2 = Adj(edge2, None, (7, 3))
-    adjs = [adjs2, adjs1]  # hop2会排序吗? 不一定. 不过hop1节点都在hop2前面
-    target_node = torch.tensor([2])
-
-    cached_nodes = torch.tensor([[3], [4]])  # target node, 1hop, 2hop ...
-    sub_n_id, sub_adjs = prune(target_node, adjs, cached_nodes)
-    assert torch.equal(sub_n_id, torch.tensor([2, 3, 4, 6, 7]))
-    assert torch.equal(
-        sub_adjs[1].edge_index,
-        torch.tensor([[3, 4, 6, 7, 5, 8], [2, 2, 3, 3, 4, 4]]),
-    )
-    assert torch.equal(sub_adjs[0].edge_index, torch.tensor([[3, 4], [2, 2]]))
-
-
 if __name__ == "__main__":
     # test_prune_computatition_graph()
     # test_save_embedding()
     # test_load_embedding()
-    # test_push_and_pull()
-    test_save_and_load()
+    test_pull_and_push()

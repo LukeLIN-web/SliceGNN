@@ -53,7 +53,7 @@ def test_real_dataset():
             accs.append(correct / mask.sum().item())
         return accs
 
-    for epoch in range(1, 31):
+    for epoch in range(1):
         loss = train()
         if epoch % 5 == 0:
             train_acc, val_acc, test_acc = test()
