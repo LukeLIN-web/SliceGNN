@@ -1,20 +1,15 @@
 # GNN Project
-We implment `slice adj and get  micro batch` graph partition
+We implment `slice adj and get  nano batch` graph partition
+
+We implement pipeline using `torch.multiple_process.queue`
+
+We implement prune computation graph function.
+
+We write many test to ensure the correctness of our code
 
 
-```python
-def slice_adj(
-    node_idx: Union[int, List[int], Tensor],
-    edge_index: Tensor,
-    relabel_nodes: bool = False,
-    num_nodes: Optional[int] = None,
-    flow: str = 'source_to_target',
-) -> Tuple[Tensor, Tensor,  Tensor]:
 
-def get_nano_batch(
-    adjs: List[Adj],
-    n_id: Tensor,
-    batch_size: int,
-    num_micro_batch: int = 2,
-) -> List[Nanobatch]:
-```
+Env
+torch 1.11.0
+cuda_11.3
+torch_geometric 2.2.0
