@@ -45,30 +45,18 @@ class ScaleSAGE(ScalableGNN):
     def forward(self, x: Tensor, nb, histories: torch.nn.ModuleList) -> Tensor:
         pruned_adjs = prune_computation_graph(nb, histories)
         for i, (edge_index, _, size) in enumerate(pruned_adjs):
-            h = self.convs[i](
-                x, edge_index)  # compute the non cached nodes embedding
-            non_empty_indices = (h != 0).nonzero()
-            # print(non_empty_indices)
-            print(h)
-            print(x)
-            # # print(non_empty_indices.shape)
-            # print(h.shape)
-            # print(x.shape)
-            x[non_empty_indices] = h[non_empty_indices]
-            # a=  h[non_empty_indices]
-            # b = x[non_empty_indices]
+            batch_size = nb.adjs[i].size[1]
+            x_target = x[:batch_size]  # nano batch layer nodes
+            x = self.convs[i](
+                (x, x_target),
+                edge_index)  # compute the non cached nodes embedding
             if i != self.num_layers - 1:  # last layer is not saved
                 x = F.relu(x)
                 history = histories[i]
-                batch_size = nb.adjs[i].size[
-                    1]  # require 前size[0]个节点是 layer nodes
                 history.pull(x, nb.n_id[:batch_size])
                 history.push(
-                    x[:batch_size],
-                    nb.n_id[:batch_size])  # Push all, including just pulled.
-                # require 前size[1]个节点是 next layer nodes
+                    x, nb.n_id[:batch_size])  # Push all, including just pulled
                 x = F.dropout(x, p=0.5, training=self.training)
-        x = x[:nb.adjs[-1].size[1]]
         return x.log_softmax(dim=-1)
 
     @torch.no_grad()

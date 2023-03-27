@@ -23,6 +23,7 @@ torch.manual_seed(23)
 
 
 def test_same_out():
+
     train_loader = NeighborSampler(
         edge_index,
         sizes=hop,
@@ -31,7 +32,6 @@ def test_same_out():
         drop_last=True,
     )
 
-    torch.manual_seed(0)
     batch_size, n_id, adjs = next(iter(train_loader))
     model = ScaleSAGE(in_channels, hidden_channels, out_channels, num_layers)
     model.eval()
@@ -45,6 +45,7 @@ def test_same_out():
         for _ in range(num_layers - 1)
     ])
     nb = nano_batchs[0]
+    x = torch.tensor(features, dtype=torch.float)
     out = model(x[n_id][nb.n_id], nb, histories)
     model2 = SAGE(in_channels, hidden_channels, out_channels, num_layers)
     model2.load_state_dict(model.state_dict())
@@ -54,6 +55,43 @@ def test_same_out():
         assert torch.equal(value1, value2)
     out2 = model2(x[n_id][nb.n_id], nb.adjs)
     assert torch.abs((out - out2).mean()) < 0.01
+
+
+def test_save_embedding():
+    train_loader = NeighborSampler(
+        edge_index,
+        sizes=hop,
+        batch_size=2,
+        shuffle=False,
+        drop_last=True,
+    )
+    batch_size, n_id, adjs = next(iter(train_loader))
+    model = ScaleSAGE(in_channels, hidden_channels, out_channels, num_layers)
+    model.eval()
+    nano_batchs = get_nano_batch(adjs,
+                                 n_id,
+                                 batch_size,
+                                 num_nano_batch=2,
+                                 relabel_nodes=True)
+    histories = torch.nn.ModuleList([
+        History(len(n_id), hidden_channels, 'cpu')
+        for _ in range(num_layers - 1)
+    ])
+    nb = nano_batchs[0]
+    x = torch.tensor(features, dtype=torch.float)
+    model(x[n_id][nb.n_id], nb, histories)
+    assert torch.equal(histories[0].emb[1], torch.zeros(4))
+    assert torch.equal(
+        histories[0].cached_nodes,
+        torch.tensor([True, False, True, True, False, False, False, False]))
+    histories[0].reset_parameters()
+
+    nb = nano_batchs[1]
+    model(x[n_id][nb.n_id], nb, histories)
+    assert torch.equal(histories[0].emb[0], torch.zeros(4))
+    assert torch.equal(
+        histories[0].cached_nodes,
+        torch.tensor([False, True, False, True, True, False, False, False]))
 
 
 def test_history_function():
@@ -81,19 +119,20 @@ def test_history_function():
     ])
     histories[0].cached_nodes = torch.tensor(
         [False, False, False, True, False, False, False, False])
-    histories[0].emb[3] = torch.tensor([3.3, 3.4])  # should be pull
+    histories[0].emb[3] = torch.tensor([3.3, 3.4, 3.5, 3.6])  # should be pull
     nb = nano_batchs[1]
     pruned_adjs = prune_computation_graph(nb, histories)
+    x = torch.tensor(features, dtype=torch.float)
     x = x[mb_n_id][nb.n_id]
     for i, (edge_index, _, size) in enumerate(pruned_adjs):
-        h = convs[i](x, edge_index)  # compute the non cached nodes embedding
-        non_empty_indices = (h != 0).nonzero()
-        x[non_empty_indices] = h[non_empty_indices]
+        batch_size = nb.adjs[i].size[1]
+        x_target = x[:nb.adjs[i].size[1]]  # require 前size[0]个节点是 layer nodes
+        x = convs[i]((x, x_target),
+                     edge_index)  # compute the non cached nodes embedding
         if i != num_layers - 1:  # last layer is not saved
             history = histories[i]
-            batch_size = nb.adjs[i].size[1]  # require 前size[0]个节点是 layer nodes
             history.pull(x, nb.n_id[:batch_size])
-            assert torch.equal(x[1], torch.tensor([3.3, 3.4]))
+            assert torch.equal(x[1], torch.tensor([3.3, 3.4, 3.5, 3.6]))
             history.push(x[:batch_size], nb.n_id[:batch_size]
                          )  # Push all, including the ones just pulled.
             assert torch.equal(
@@ -110,7 +149,6 @@ def test_pull_and_push():
     adjs2 = Adj(edge2, None, (8, 5))
     adjs = [adjs2, adjs1]
 
-    torch.manual_seed(23)
     convs = torch.nn.ModuleList()
     convs.append(
         SAGEConv(in_channels, hidden_channels, root_weight=False, bias=False))
@@ -134,12 +172,12 @@ def test_pull_and_push():
     x = torch.tensor(features, dtype=torch.float)
     x = x[mb_n_id][nb.n_id]
     for i, (edge_index, _, size) in enumerate(pruned_adjs):
-        h = convs[i](x, edge_index)  # compute the non cached nodes embedding
-        non_empty_indices = (h != 0).nonzero()
-        x[non_empty_indices] = h[non_empty_indices]
+        batch_size = nb.adjs[i].size[1]
+        x_target = x[:nb.adjs[i].size[1]]  # require 前size[0]个节点是 layer nodes
+        x = convs[i]((x, x_target),
+                     edge_index)  # compute the non cached nodes embedding
         if i != num_layers - 1:  # last layer is not saved
             history = histories[i]
-            batch_size = nb.adjs[i].size[1]  # require 前size[0]个节点是 layer nodes
             for j, id in enumerate(nb.n_id[:batch_size]):
                 if history.cached_nodes[id] == True:
                     assert j == 1
@@ -151,42 +189,6 @@ def test_pull_and_push():
                 history.cached_nodes,
                 torch.tensor(
                     [False, True, False, True, True, False, False, False]))
-
-
-def test_save_embedding():
-    train_loader = NeighborSampler(
-        edge_index,
-        sizes=hop,
-        batch_size=2,
-        shuffle=False,
-        drop_last=True,
-    )
-    batch_size, n_id, adjs = next(iter(train_loader))
-    model = ScaleSAGE(in_channels, hidden_channels, out_channels, num_layers)
-    model.eval()
-    nano_batchs = get_nano_batch(adjs,
-                                 n_id,
-                                 batch_size,
-                                 num_nano_batch=2,
-                                 relabel_nodes=True)
-    histories = torch.nn.ModuleList([
-        History(len(n_id), hidden_channels, 'cpu')
-        for _ in range(num_layers - 1)
-    ])
-    nb = nano_batchs[0]
-    model(x[n_id][nb.n_id], nb, histories)
-    assert torch.equal(histories[0].emb[3],
-                       torch.tensor([0.0, 0.0]))  # node 2 don't save
-    assert torch.equal(histories[0].cached_nodes,
-                       torch.tensor([True, True, True, False, False]))
-    histories[0].reset_parameters()
-
-    nb = nano_batchs[1]
-    model(x[n_id][nb.n_id], nb, histories)
-    assert torch.equal(histories[0].emb[2],
-                       torch.tensor([0.0, 0.0]))  # node 6 don't save
-    assert torch.equal(histories[0].cached_nodes,
-                       torch.tensor([True, True, False, True, False]))
 
 
 if __name__ == "__main__":

@@ -23,7 +23,6 @@ class History(torch.nn.Module):
                                        dtype=torch.bool,
                                        device=device,
                                        pin_memory=pin_memory)
-        # eg. tensor([ True,  True,  True, False])
 
         self._device = torch.device("cpu")
 
@@ -31,7 +30,7 @@ class History(torch.nn.Module):
 
     def reset_parameters(self):
         self.emb.fill_(0)
-        self.cached_nodes.fill_(False)  # 0 is a valid node id.
+        self.cached_nodes.fill_(False)
 
     def _apply(self, fn):
         # Set the `_device` of the module without transfering `self.emb`.
