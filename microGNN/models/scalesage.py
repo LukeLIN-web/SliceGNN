@@ -5,10 +5,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from torch_geometric.nn import SAGEConv
 
-from microGNN import History
 from microGNN.prune import prune_computation_graph
-from microGNN.utils import slice_adj
-from microGNN.utils.common_class import Adj, Nanobatch
 
 from .base import ScalableGNN
 
@@ -51,7 +48,15 @@ class ScaleSAGE(ScalableGNN):
             h = self.convs[i](
                 x, edge_index)  # compute the non cached nodes embedding
             non_empty_indices = (h != 0).nonzero()
+            # print(non_empty_indices)
+            print(h)
+            print(x)
+            # # print(non_empty_indices.shape)
+            # print(h.shape)
+            # print(x.shape)
             x[non_empty_indices] = h[non_empty_indices]
+            # a=  h[non_empty_indices]
+            # b = x[non_empty_indices]
             if i != self.num_layers - 1:  # last layer is not saved
                 x = F.relu(x)
                 history = histories[i]
@@ -65,3 +70,20 @@ class ScaleSAGE(ScalableGNN):
                 x = F.dropout(x, p=0.5, training=self.training)
         x = x[:nb.adjs[-1].size[1]]
         return x.log_softmax(dim=-1)
+
+    @torch.no_grad()
+    def inference(self, x_all, device, subgraph_loader):
+        for i in range(self.num_layers):
+            xs = []
+            for batch_size, n_id, adj in subgraph_loader:
+                edge_index, _, size = adj.to(device)
+                x = x_all[n_id].to(device)
+                x_target = x[:size[1]]
+                x = self.convs[i]((x, x_target), edge_index)
+                if i != self.num_layers - 1:
+                    x = F.relu(x)
+                xs.append(x)
+
+            x_all = torch.cat(xs, dim=0)
+
+        return x_all

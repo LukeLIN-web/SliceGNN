@@ -9,7 +9,11 @@ We write many test to ensure the correctness of our code
 
 
 
-Env
+# Env
+```
 torch 1.11.0
 cuda_11.3
 torch_geometric 2.2.0
+torch-scatter          2.1.0
+torch-sparse           0.6.16
+```

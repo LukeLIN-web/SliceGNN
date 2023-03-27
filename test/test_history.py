@@ -14,7 +14,12 @@ def test_same_out():
     edge_index = torch.tensor([[0, 0, 1, 1, 2, 2, 6, 7],
                                [1, 6, 0, 2, 1, 7, 0, 2]], dtype=torch.long) # noqa
     # yapf: enable
-    x = torch.tensor([[0,0],[1, 1],[2, 2],[3, 3],[4, 4],[5, 5],[6, 6],[7,7]],dtype=torch.float) # yapf: disable
+    node_num = 8
+    in_channels = 8
+    num_hidden = 4
+    out_channels = 2
+    features = [[i for j in range(in_channels)] for i in range(node_num)]
+    x = torch.tensor(features, dtype=torch.float)
     hop = [-1, -1]
     num_layers = len(hop)
     train_loader = NeighborSampler(
@@ -24,12 +29,12 @@ def test_same_out():
         shuffle=False,
         drop_last=True,
     )
-    num_hidden = 2
+
     torch.manual_seed(0)
     batch_size, n_id, adjs = next(iter(train_loader))
-    model = ScaleSAGE(in_channels=2,
+    model = ScaleSAGE(in_channels=in_channels,
                       hidden_channels=num_hidden,
-                      out_channels=2,
+                      out_channels=out_channels,
                       num_layers=num_layers)
     model.eval()
     nano_batchs = get_nano_batch(adjs,
@@ -41,9 +46,9 @@ def test_same_out():
         [History(len(n_id), num_hidden, 'cpu') for _ in range(num_layers - 1)])
     nb = nano_batchs[0]
     out = model(x[n_id][nb.n_id], nb, histories)
-    model2 = SAGE(in_channels=2,
+    model2 = SAGE(in_channels=in_channels,
                   hidden_channels=num_hidden,
-                  out_channels=2,
+                  out_channels=out_channels,
                   num_layers=num_layers)
     model2.load_state_dict(model.state_dict())
     model2.eval()
