@@ -7,7 +7,7 @@ from microGNN import History
 from microGNN.models import SAGE, ScaleSAGE
 from microGNN.prune import prune_computation_graph
 from microGNN.utils import get_nano_batch
-from microGNN.utils.common_class import Adj, Nanobatch
+from microGNN.utils.common_class import Adj
 
 hop = [-1, -1]
 num_layers = 2
@@ -84,7 +84,6 @@ def test_save_embedding():
     ])
     nb = nano_batchs[0]
     x = torch.tensor(features, dtype=torch.float)
-    print(nb.n_id.device)
     model(x[n_id][nb.n_id], nb.n_id, nb.adjs, histories)
     assert torch.equal(histories[0].emb[1], torch.zeros(4))
     assert torch.equal(

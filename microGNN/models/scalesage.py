@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from torch_geometric.nn import SAGEConv
 
+from microGNN import History
 from microGNN.prune import prune_computation_graph
 
 from .base import ScalableGNN
@@ -44,15 +45,17 @@ class ScaleSAGE(ScalableGNN):
     # history [0] is outer hop, [1] inner hop, [-1] is 1hop
     def forward(self, x: Tensor, n_id: Tensor, adjs: List,
                 histories: torch.nn.ModuleList) -> Tensor:
+        print(x.device)
         pruned_adjs = prune_computation_graph(n_id, adjs, histories)
         for i, (edge_index, _, size) in enumerate(pruned_adjs):
             batch_size = adjs[i].size[1]
             x_target = x[:batch_size]  # nano batch layer nodes
+            print(x.device, x_target.device, edge_index.device)
             x = self.convs[i]((x, x_target),
                               edge_index)  # non cached nodes embedding
             if i != self.num_layers - 1:  # last layer is not saved
                 x = F.relu(x)
-                history = histories[i]
+                history: History = histories[i]
                 x = history.pull(x, n_id[:batch_size])
                 history.push(
                     x, n_id[:batch_size])  # Push all, including just pulled

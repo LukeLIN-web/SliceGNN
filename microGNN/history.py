@@ -43,7 +43,7 @@ class History(torch.nn.Module):
         for j, id in enumerate(n_id):
             if self.cached_nodes[id] == True:
                 out[j] = self.emb[id]
-        return out.to(device=self._device)
+        return out.to(device=x.device)
 
     @torch.no_grad()
     def push(
