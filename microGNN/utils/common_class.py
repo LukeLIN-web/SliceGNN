@@ -1,4 +1,5 @@
 from typing import List, NamedTuple, Tuple
+
 from torch import Tensor
 
 
@@ -19,6 +20,6 @@ class Nanobatch(NamedTuple):
 
     def to(self, *args, **kwargs):
         n_id = self.n_id.to(*args, **kwargs) if self.n_id is not None else None
-        return Nanobatch(
-            self.n_id.to(*args, **kwargs), self.size, self.adjs.to(*args, **kwargs)
-        )
+        for adj in self.adjs:
+            adj.to(*args, **kwargs)
+        return Nanobatch(n_id, self.size, self.adjs.to(*args, **kwargs))

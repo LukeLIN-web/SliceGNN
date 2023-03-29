@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List, Optional
 
 import torch
 import torch.nn.functional as F
@@ -42,20 +42,20 @@ class ScaleSAGE(ScalableGNN):
             conv.reset_parameters()
 
     # history [0] is outer hop, [1] inner hop, [-1] is 1hop
-    def forward(self, x: Tensor, nb, histories: torch.nn.ModuleList) -> Tensor:
-        pruned_adjs = prune_computation_graph(nb, histories)
+    def forward(self, x: Tensor, n_id: Tensor, adjs: List,
+                histories: torch.nn.ModuleList) -> Tensor:
+        pruned_adjs = prune_computation_graph(n_id, adjs, histories)
         for i, (edge_index, _, size) in enumerate(pruned_adjs):
-            batch_size = nb.adjs[i].size[1]
+            batch_size = adjs[i].size[1]
             x_target = x[:batch_size]  # nano batch layer nodes
-            x = self.convs[i](
-                (x, x_target),
-                edge_index)  # compute the non cached nodes embedding
+            x = self.convs[i]((x, x_target),
+                              edge_index)  # non cached nodes embedding
             if i != self.num_layers - 1:  # last layer is not saved
                 x = F.relu(x)
                 history = histories[i]
-                x = history.pull(x, nb.n_id[:batch_size])
+                x = history.pull(x, n_id[:batch_size])
                 history.push(
-                    x, nb.n_id[:batch_size])  # Push all, including just pulled
+                    x, n_id[:batch_size])  # Push all, including just pulled
                 x = F.dropout(x, p=0.5, training=self.training)
         return x.log_softmax(dim=-1)
 

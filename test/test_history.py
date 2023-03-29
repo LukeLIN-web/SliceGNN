@@ -1,6 +1,7 @@
 import torch
 from torch_geometric.loader import NeighborSampler
 from torch_geometric.nn.conv import SAGEConv
+from torch_geometric.testing.decorators import withCUDA
 
 from microGNN import History
 from microGNN.models import SAGE, ScaleSAGE
@@ -22,8 +23,8 @@ edge_index = torch.tensor([[2, 3, 3, 4, 5, 6, 7],
 torch.manual_seed(23)
 
 
-def test_same_out():
-
+@withCUDA
+def test_same_out(device):
     train_loader = NeighborSampler(
         edge_index,
         sizes=hop,
@@ -33,7 +34,8 @@ def test_same_out():
     )
 
     batch_size, n_id, adjs = next(iter(train_loader))
-    model = ScaleSAGE(in_channels, hidden_channels, out_channels, num_layers)
+    model = ScaleSAGE(in_channels, hidden_channels, out_channels,
+                      num_layers).to(device)
     model.eval()
     nano_batchs = get_nano_batch(adjs,
                                  n_id,
@@ -41,12 +43,15 @@ def test_same_out():
                                  num_nano_batch=2,
                                  relabel_nodes=True)
     histories = torch.nn.ModuleList([
-        History(len(n_id), hidden_channels, 'cpu')
+        History(len(n_id), hidden_channels, device)
         for _ in range(num_layers - 1)
     ])
     nb = nano_batchs[0]
-    x = torch.tensor(features, dtype=torch.float)
-    out = model(x[n_id][nb.n_id], nb, histories)
+    x = torch.tensor(features, dtype=torch.float).to(device)
+    adjs = [adj.to(device) for adj in nb.adjs]
+    nbid = nb.n_id.to(device)
+
+    out = model(x[n_id][nbid], nbid, adjs, histories)
     model2 = SAGE(in_channels, hidden_channels, out_channels, num_layers)
     model2.load_state_dict(model.state_dict())
     model2.eval()
@@ -79,7 +84,8 @@ def test_save_embedding():
     ])
     nb = nano_batchs[0]
     x = torch.tensor(features, dtype=torch.float)
-    model(x[n_id][nb.n_id], nb, histories)
+    print(nb.n_id.device)
+    model(x[n_id][nb.n_id], nb.n_id, nb.adjs, histories)
     assert torch.equal(histories[0].emb[1], torch.zeros(4))
     assert torch.equal(
         histories[0].cached_nodes,
@@ -87,7 +93,7 @@ def test_save_embedding():
     histories[0].reset_parameters()
 
     nb = nano_batchs[1]
-    model(x[n_id][nb.n_id], nb, histories)
+    model(x[n_id][nb.n_id], nb.n_id, nb.adjs, histories)
     assert torch.equal(histories[0].emb[0], torch.zeros(4))
     assert torch.equal(
         histories[0].cached_nodes,
@@ -121,7 +127,7 @@ def test_history_function():
         [False, False, False, True, False, False, False, False])
     histories[0].emb[3] = torch.tensor([3.3, 3.4, 3.5, 3.6])  # should be pull
     nb = nano_batchs[1]
-    pruned_adjs = prune_computation_graph(nb, histories)
+    pruned_adjs = prune_computation_graph(nb.n_id, nb.adjs, histories)
     x = torch.tensor(features, dtype=torch.float)
     x = x[mb_n_id][nb.n_id]
     for i, (edge_index, _, size) in enumerate(pruned_adjs):
@@ -168,7 +174,7 @@ def test_pull_and_push():
         [False, False, False, True, False, False, False, False])
     histories[0].emb[3] = torch.tensor([3.3, 3.4, 3.5, 3.6])  # should be pull
     nb = nano_batchs[1]
-    pruned_adjs = prune_computation_graph(nb, histories)
+    pruned_adjs = prune_computation_graph(nb.n_id, nb.adjs, histories)
     x = torch.tensor(features, dtype=torch.float)
     x = x[mb_n_id][nb.n_id]
     for i, (edge_index, _, size) in enumerate(pruned_adjs):
