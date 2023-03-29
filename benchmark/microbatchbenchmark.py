@@ -8,7 +8,6 @@ from timeit import default_timer
 import hydra
 import torch
 from omegaconf import OmegaConf
-# from torch.profiler import profile, record_function, ProfilerActivity
 from torch_geometric.loader import NeighborSampler
 
 import quiver
@@ -64,7 +63,6 @@ def train(conf):
         model.train()
         epoch_start = default_timer()
         for seeds in train_loader:
-            optimizer.zero_grad()
             n_id, batch_size, adjs = quiver_sampler.sample(seeds)
             target_node = n_id[:batch_size]
             nano_batchs = get_nano_batch(adjs, n_id, batch_size,
@@ -80,6 +78,7 @@ def train(conf):
                 )
                 loss.backward()
             optimizer.step()
+            optimizer.zero_grad()
         print(
             f"Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {default_timer() - epoch_start}"
         )
