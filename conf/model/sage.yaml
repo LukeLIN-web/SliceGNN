@@ -1,15 +1,11 @@
 name: sage
 params:
-  architecture:
-    num_layers: 2
-    hidden_channels: 256
-    dropout: 0.5
-  num_parts: 40
+  num_layers: 2
+  hidden_channels: 256
+  dropout: 0.5
   batch_size: 1024
   hop: [25, 10]
-  num_workers: 0
   lr: 0.01
-  dropout: 0.5
   num_epoch: 5
   nano_pergpu: 2
   num_train_worker: 1

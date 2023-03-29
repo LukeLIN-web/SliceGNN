@@ -3,16 +3,17 @@ sample : quiver
 1gpu
 """
 import logging
-import torch
-import hydra
-from omegaconf import OmegaConf
-import quiver
-from microGNN.utils import get_nano_batch, cal_metrics, get_dataset
-from microGNN.models import SAGE, criterion
 from timeit import default_timer
 
-# from torch.profiler import profile, record_function, ProfilerActivity
+import hydra
+import torch
+from omegaconf import OmegaConf
 from torch_geometric.loader import NeighborSampler
+
+import quiver
+from microGNN import History
+from microGNN.models import ScaleSAGE, criterion
+from microGNN.utils import get_dataset, get_nano_batch
 
 log = logging.getLogger(__name__)
 
@@ -25,9 +26,10 @@ def train(conf):
     dataset = get_dataset(dataset_name, conf.root)
     data = dataset[0]
     csr_topo = quiver.CSRTopo(data.edge_index)
-    quiver_sampler = quiver.pyg.GraphSageSampler(
-        csr_topo, sizes=params.hop, device=0, mode="GPU"
-    )
+    quiver_sampler = quiver.pyg.GraphSageSampler(csr_topo,
+                                                 sizes=params.hop,
+                                                 device=0,
+                                                 mode="GPU")
     rank = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     if dataset_name == "ogbn-products" or dataset_name == "papers100M":
         split_idx = dataset.get_idx_split()
@@ -39,9 +41,12 @@ def train(conf):
     else:
         train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
     gpu_num, per_gpu = params.num_train_worker, params.nano_pergpu
-    train_loader = torch.utils.data.DataLoader(
-        train_idx, batch_size=params.batch_size * gpu_num, shuffle=False, drop_last=True
-    )
+    train_loader = torch.utils.data.DataLoader(train_idx,
+                                               batch_size=params.batch_size *
+                                               gpu_num,
+                                               num_workers=14,
+                                               shuffle=False,
+                                               drop_last=True)
     subgraph_loader = NeighborSampler(
         data.edge_index,
         node_idx=None,
@@ -51,7 +56,10 @@ def train(conf):
         num_workers=14,
     )
     torch.manual_seed(12345)
-    model = SAGE(data.num_features, 256, dataset.num_classes).to(rank)
+    model = ScaleSAGE(in_channels=data.num_features,
+                      hidden_channels=params.hidden_channels,
+                      out_channels=dataset.num_classes,
+                      num_layers=params.num_layers).to(rank)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
     x, y = data.x.to(rank), data.y.to(rank)
@@ -63,15 +71,19 @@ def train(conf):
             optimizer.zero_grad()
             n_id, batch_size, adjs = quiver_sampler.sample(seeds)
             target_node = n_id[:batch_size]
-            nano_batchs = get_nano_batch(adjs, n_id, batch_size, gpu_num * per_gpu)
-            for i, nano_batch in enumerate(nano_batchs):
-                nano_batch_adjs = [adj.to(rank) for adj in nano_batch.adjs]
-                out = model(x[n_id][nano_batch.n_id], nano_batch_adjs)
+            nano_batchs = get_nano_batch(adjs, n_id, batch_size,
+                                         gpu_num * per_gpu)
+            histories = torch.nn.ModuleList([
+                History(len(n_id), params.hidden_channels, rank)
+                for _ in range(params.num_layers - 1)
+            ])
+            for i, nb in enumerate(nano_batchs):
+                adjs = [adj.to(rank) for adj in nb.adjs]
+                nbid = nb.n_id.to(rank)
+                out = model(x[n_id][nb.n_id], nbid, adjs, histories)
                 loss = criterion(
-                    out,
-                    y[target_node][i * (nano_batch.size) : (i + 1) * (nano_batch.size)],
-                    dataset_name,
-                )
+                    out, y[target_node][i * (nb.size):(i + 1) * (nb.size)],
+                    dataset_name)
                 loss.backward()
             optimizer.step()
         print(
