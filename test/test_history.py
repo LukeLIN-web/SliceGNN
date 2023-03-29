@@ -131,7 +131,7 @@ def test_history_function():
                      edge_index)  # compute the non cached nodes embedding
         if i != num_layers - 1:  # last layer is not saved
             history = histories[i]
-            history.pull(x, nb.n_id[:batch_size])
+            x = history.pull(x, nb.n_id[:batch_size])
             assert torch.equal(x[1], torch.tensor([3.3, 3.4, 3.5, 3.6]))
             history.push(x[:batch_size], nb.n_id[:batch_size]
                          )  # Push all, including the ones just pulled.

@@ -39,9 +39,11 @@ class History(torch.nn.Module):
 
     @torch.no_grad()
     def pull(self, x: Tensor, n_id: Tensor) -> Tensor:
+        out = x.clone()
         for j, id in enumerate(n_id):
             if self.cached_nodes[id] == True:
-                x[j] = self.emb[id]
+                out[j] = self.emb[id]
+        return out.to(device=self._device)
 
     @torch.no_grad()
     def push(
