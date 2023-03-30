@@ -13,18 +13,14 @@ from .base import ScalableGNN
 
 class ScaleSAGE(ScalableGNN):
 
-    def __init__(
-        self,
-        in_channels: int,
-        hidden_channels: int,
-        out_channels: int,
-        num_layers: int,
-        pool_size: Optional[int] = None,
-        buffer_size: Optional[int] = None,
-        device=None,
-    ):
-        super().__init__(hidden_channels, num_layers, pool_size, buffer_size,
-                         device)
+    def __init__(self,
+                 in_channels: int,
+                 hidden_channels: int,
+                 out_channels: int,
+                 num_layers: int,
+                 pool_size: Optional[int] = None,
+                 buffer_size: Optional[int] = None):
+        super().__init__(hidden_channels, num_layers, pool_size, buffer_size)
 
         self.in_channels = in_channels
         self.out_channels = out_channels

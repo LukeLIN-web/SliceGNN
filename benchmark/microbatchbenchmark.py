@@ -30,7 +30,6 @@ def train(conf):
                                                  device=0,
                                                  mode="GPU")
     rank = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    gpu_num, per_gpu = params.num_train_worker, params.nano_pergpu
     if dataset_name == "ogbn-products" or dataset_name == "papers100M":
         split_idx = dataset.get_idx_split()
         train_idx, valid_idx, test_idx = (
@@ -40,6 +39,7 @@ def train(conf):
         )
     else:
         train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
+    gpu_num, per_gpu = params.num_train_worker, params.nano_pergpu
     train_loader = torch.utils.data.DataLoader(train_idx,
                                                batch_size=params.batch_size *
                                                gpu_num,
@@ -55,7 +55,8 @@ def train(conf):
         num_workers=14,
     )
     torch.manual_seed(12345)
-    model = SAGE(data.num_features, 256, dataset.num_classes).to(rank)
+    model = SAGE(data.num_features, params.hidden_channels,
+                 dataset.num_classes).to(rank)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
     x, y = data.x.to(rank), data.y.to(rank)

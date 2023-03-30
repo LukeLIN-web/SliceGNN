@@ -1,11 +1,30 @@
 import torch
 from torch import Tensor
-from torch_geometric.loader import NeighborSampler
+from torch_geometric.data import Data
+from torch_geometric.loader import NeighborLoader, NeighborSampler
 
 from microGNN.models import SAGE
-from microGNN.utils import get_nano_batch, slice_adj
+from microGNN.utils import get_loader_nano_batch, get_nano_batch, slice_adj
 
 num_features, hidden_size, num_classes = 2, 16, 1
+
+
+def test_loader_mapping():
+    edge_index = torch.tensor([[2, 3, 3, 4, 5, 6, 7], [0, 0, 1, 1, 2, 3, 4]],
+                              dtype=torch.long)
+    hop = [-1, -1]
+    data = Data(edge_index=edge_index)
+    loader = NeighborLoader(data, hop, batch_size=2)
+    batch = next(iter(loader))
+    assert isinstance(batch, Data)
+    assert batch.n_id.size() == (batch.num_nodes, )
+    nano_batchs = get_loader_nano_batch(batch, num_nano_batch=2)
+    assert nano_batchs[0].n_id.tolist() == [0, 2, 3, 5, 6]
+    assert nano_batchs[1].n_id.tolist() == [1, 3, 4, 6, 7]
+    assert torch.equal(nano_batchs[0].edge_index,
+                       torch.tensor([[1, 2, 3, 4], [0, 0, 1, 2]]))
+    assert torch.equal(nano_batchs[1].edge_index,
+                       torch.tensor([[1, 2, 3, 4], [0, 0, 1, 2]]))
 
 
 def test_slice_adj():
@@ -136,5 +155,6 @@ def test_forward():
 
 
 if __name__ == "__main__":
-    test_mapping()
+    # test_mapping()
     # test_slice_adj()
+    test_loader_mapping()

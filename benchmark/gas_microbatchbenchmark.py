@@ -56,10 +56,8 @@ def train(conf):
         num_workers=14,
     )
     torch.manual_seed(12345)
-    model = ScaleSAGE(in_channels=data.num_features,
-                      hidden_channels=params.hidden_channels,
-                      out_channels=dataset.num_classes,
-                      num_layers=params.num_layers).to(rank)
+    model = ScaleSAGE(data.num_features, params.hidden_channels,
+                      dataset.num_classes, params.num_layers).to(rank)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
     x, y = data.x.to(rank), data.y.to(rank)
@@ -89,6 +87,9 @@ def train(conf):
         print(
             f"Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {default_timer() - epoch_start}"
         )
+        print(
+            f"Maximum GPU memory usage: {torch.cuda.max_memory_allocated()/10**9} G bytes"
+        )
         if epoch % 5 == 0:  # We evaluate on a single GPU for now
             model.eval()
             with torch.no_grad():
@@ -99,9 +100,6 @@ def train(conf):
             acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
             acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
             print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
-    print(
-        f"Maximum GPU memory usage: {torch.cuda.max_memory_allocated()/10**9} G bytes"
-    )
 
 
 if __name__ == "__main__":

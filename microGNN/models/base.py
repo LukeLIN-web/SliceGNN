@@ -39,7 +39,6 @@ class ScalableGNN(torch.nn.Module):
         num_layers: int,
         pool_size: Optional[int] = None,
         buffer_size: Optional[int] = None,
-        device=None,
     ):
         super().__init__()
 
@@ -51,10 +50,6 @@ class ScalableGNN(torch.nn.Module):
     @property
     def emb_device(self):
         return self.histories[0].emb.device
-
-    @property
-    def device(self):
-        return self.histories[0]._device
 
     def reset_parameters(self):
         for history in self.histories:

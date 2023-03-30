@@ -2,6 +2,7 @@ from typing import List, Optional, Tuple, Union
 
 import torch
 from torch import Tensor
+from torch_geometric.data import Data
 from torch_geometric.utils.num_nodes import maybe_num_nodes
 
 from microGNN.utils.common_class import Adj, Nanobatch
@@ -132,6 +133,44 @@ def get_nano_batch(
             subadjs.append(Adj(sub_adjs, None, (len(sub_nid), target_size)))
         subadjs.reverse()  # O(n) 大的在前面
         nano_batchs.append(Nanobatch(sub_nid, nano_batch_size, subadjs))
+    return nano_batchs
+
+
+# get nano batch for neighbor loader
+def get_loader_nano_batch(batch: Data, num_nano_batch=2) -> List[Data]:
+    r"""Create a list of `num_nano_batch` nanobatches
+    from Data.
+
+    Args:
+        num_nano_batch:  nano batch number
+    :rtype: List[Data]
+    """
+    batch_size = batch.batch_size
+    assert (batch_size >= num_nano_batch
+            ), "batch_size must be bigger than num_nano_batch"  # noqa
+    n_id = torch.arange(len(batch.n_id))  # relabel for mini batch
+    mod = batch_size % num_nano_batch
+    if mod != 0:
+        batch_size -= mod
+    assert batch_size % num_nano_batch == 0
+    nano_batch_size = batch_size // num_nano_batch  # TODO: padding last batch
+    nano_batchs = []
+    for i in range(num_nano_batch):
+        sub_nid = n_id[i * nano_batch_size:(i + 1) *
+                       nano_batch_size]  # 从target node开始
+        sub_nid, sub_adjs, edge_mask = slice_adj(
+            sub_nid,
+            batch.edge_index,
+            relabel_nodes=True,
+        )
+        sub_batch = Data(
+            x=batch.x[sub_nid],
+            edge_index=sub_adjs,
+            y=batch.y[sub_nid],
+            n_id=sub_nid,
+            batch_size=nano_batch_size,
+        )
+        nano_batchs.append(sub_batch)
     return nano_batchs
 
 
