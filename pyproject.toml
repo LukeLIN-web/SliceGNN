@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "microGNN"
+version = "0.1.0"
+authors=[
+    {name="Juyi Lin", email="juyi.lin@kaust.edu.sa"},
+]
+description = "new reuse method to acclerate GraphSAGE node classfication"
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+]
+dependencies = [
+    "ogb", "hydra-core","pytest-runner","pytest", "pytest-cov"
+]
