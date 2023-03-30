@@ -137,10 +137,10 @@ def get_nano_batch(
 
 
 # get nano batch for neighbor loader
-def get_loader_nano_batch(batch: Data, num_nano_batch=2) -> List[Data]:
+def get_loader_nano_batch(batch: Data, num_nano_batch: int,
+                          hop: int) -> List[Data]:
     r"""Create a list of `num_nano_batch` nanobatches
     from Data.
-
     Args:
         num_nano_batch:  nano batch number
     :rtype: List[Data]
@@ -158,18 +158,17 @@ def get_loader_nano_batch(batch: Data, num_nano_batch=2) -> List[Data]:
     for i in range(num_nano_batch):
         sub_nid = n_id[i * nano_batch_size:(i + 1) *
                        nano_batch_size]  # 从target node开始
-        sub_nid, sub_adjs, edge_mask = slice_adj(
-            sub_nid,
-            batch.edge_index,
-            relabel_nodes=True,
-        )
-        sub_batch = Data(
-            x=batch.x[sub_nid],
-            edge_index=sub_adjs,
-            y=batch.y[sub_nid],
-            n_id=sub_nid,
-            batch_size=nano_batch_size,
-        )
+        for i in range(hop):
+            sub_nid, sub_adjs, edge_mask = slice_adj(
+                sub_nid,
+                batch.edge_index,
+                relabel_nodes=True,
+            )
+            sub_batch = Data(
+                edge_index=sub_adjs,
+                n_id=sub_nid,
+                batch_size=nano_batch_size,
+            )
         nano_batchs.append(sub_batch)
     return nano_batchs
 

@@ -6,19 +6,25 @@ from torch_geometric.loader import NeighborLoader, NeighborSampler
 from microGNN.models import SAGE
 from microGNN.utils import get_loader_nano_batch, get_nano_batch, slice_adj
 
-num_features, hidden_size, num_classes = 2, 16, 1
+hop = [-1, -1]
+num_layers = 2
+in_channels = 8
+hidden_channels = 4
+out_channels = 2
+node_num = 8
+features = [[i for j in range(in_channels)] for i in range(node_num)]
 
 
 def test_loader_mapping():
     edge_index = torch.tensor([[2, 3, 3, 4, 5, 6, 7], [0, 0, 1, 1, 2, 3, 4]],
                               dtype=torch.long)
-    hop = [-1, -1]
-    data = Data(edge_index=edge_index)
+    data = Data(x=torch.tensor(features, dtype=torch.float),
+                edge_index=edge_index)
     loader = NeighborLoader(data, hop, batch_size=2)
     batch = next(iter(loader))
     assert isinstance(batch, Data)
     assert batch.n_id.size() == (batch.num_nodes, )
-    nano_batchs = get_loader_nano_batch(batch, num_nano_batch=2)
+    nano_batchs = get_loader_nano_batch(batch, num_nano_batch=2, hop=2)
     assert nano_batchs[0].n_id.tolist() == [0, 2, 3, 5, 6]
     assert nano_batchs[1].n_id.tolist() == [1, 3, 4, 6, 7]
     assert torch.equal(nano_batchs[0].edge_index,
@@ -57,7 +63,6 @@ def test_slice_adj():
 def test_mapping():
     edge_index = torch.tensor(
         [[0, 0, 1, 1, 2, 2, 6, 7], [1, 6, 0, 2, 7, 1, 0, 2]], dtype=torch.long)
-    hop = [-1, -1]
     train_loader = NeighborSampler(
         edge_index,
         sizes=hop,
@@ -87,6 +92,7 @@ def test_forward():
         [1, 6, 0, 2, 6, 1, 3, 7, 2, 4, 8, 3, 5, 9, 4, 9, 0, 1, 7, 2, 6, 8, 3, 7, 9, 4, 5, 8]],dtype=torch.long)  # noqa
     x = torch.tensor([[0, 0], [1, 1], [2, 2], [3, 3], [4, 4], [5, 5], [6, 6], # noqa
                     [8, 3], [9, 3], [10, 3]],dtype=torch.float) # noqa
+    num_features =2
     # yapf: enable
     hop = [-1, -1, -1]  # three hop
     train_loader = NeighborSampler(
@@ -97,7 +103,7 @@ def test_forward():
         num_workers=0,
         drop_last=True,
     )
-    model = SAGE(num_features, hidden_size, num_classes, num_layers=3)
+    model = SAGE(num_features, hidden_channels, out_channels, num_layers=3)
     model.eval()
     for batch_size, n_id, adjs in train_loader:
         out = model(x[n_id], adjs)
@@ -119,7 +125,7 @@ def test_forward():
         num_workers=6,
         drop_last=True,
     )
-    model = SAGE(num_features, hidden_size, num_classes)
+    model = SAGE(num_features, hidden_channels, out_channels)
     model.eval()
     for batch_size, n_id, adjs in train_loader:
         out = model(x[n_id], adjs)
