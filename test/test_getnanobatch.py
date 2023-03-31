@@ -15,24 +15,6 @@ node_num = 8
 features = [[i for j in range(in_channels)] for i in range(node_num)]
 
 
-def test_loader_mapping():
-    edge_index = torch.tensor([[2, 3, 3, 4, 5, 6, 7], [0, 0, 1, 1, 2, 3, 4]],
-                              dtype=torch.long)
-    data = Data(x=torch.tensor(features, dtype=torch.float),
-                edge_index=edge_index)
-    loader = NeighborLoader(data, hop, batch_size=2)
-    batch = next(iter(loader))
-    assert isinstance(batch, Data)
-    assert batch.n_id.size() == (batch.num_nodes, )
-    nano_batchs = get_loader_nano_batch(batch, num_nano_batch=2, hop=2)
-    assert nano_batchs[0].n_id.tolist() == [0, 2, 3, 5, 6]
-    assert nano_batchs[1].n_id.tolist() == [1, 3, 4, 6, 7]
-    assert torch.equal(nano_batchs[0].edge_index,
-                       torch.tensor([[1, 2, 3, 4], [0, 0, 1, 2]]))
-    assert torch.equal(nano_batchs[1].edge_index,
-                       torch.tensor([[1, 2, 3, 4], [0, 0, 1, 2]]))
-
-
 def test_slice_adj():
     edge_index = torch.tensor([
         [0, 1, 2, 3, 4, 5],

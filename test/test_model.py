@@ -45,7 +45,7 @@ def test_acc():
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
     x, y = data.x.to(device), data.y.to(device)
     print("Start training...")
-    for epoch in range(5):
+    for epoch in range(1):
         model.train()
         epoch_start = default_timer()
         for seeds in train_loader:

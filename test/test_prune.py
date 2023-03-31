@@ -16,7 +16,7 @@ def test_prune_computatition_graph():
         Adj(torch.tensor([[1, 2, 3, 4], [0, 0, 1, 2]]), None, (5, 3)),
         Adj(torch.tensor([[1, 2], [0, 0]]), None, (3, 1))
     ])
-    pruned_adjs = prune_computation_graph(nb, histories)
+    pruned_adjs = prune_computation_graph(nb.n_id, nb.adjs, histories)
     assert pruned_adjs[0].edge_index.tolist() == [[1, 2, 3], [0, 0, 1]]
     assert pruned_adjs[1].edge_index.tolist() == [[1, 2], [0, 0]]
 
@@ -37,6 +37,6 @@ def test_prune_computatition_graph():
     assert nb.n_id.tolist() == [1, 3, 4, 6, 7]
     histories[0].cached_nodes = torch.tensor(
         [False, False, True, True, False, False, False, False])
-    pruned_adjs = prune_computation_graph(nb, histories)
+    pruned_adjs = prune_computation_graph(nb.n_id, nb.adjs, histories)
     assert pruned_adjs[0].edge_index.tolist() == [[1, 2, 4], [0, 0, 2]]
     assert pruned_adjs[1].edge_index.tolist() == [[1, 2], [0, 0]]
