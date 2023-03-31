@@ -52,13 +52,14 @@ def test_same_out(device):
     nbid = nb.n_id.to(device)
 
     out = model(x[n_id][nbid], nbid, adjs, histories)
-    model2 = SAGE(in_channels, hidden_channels, out_channels, num_layers)
+    model2 = SAGE(in_channels, hidden_channels, out_channels,
+                  num_layers).to(device)
     model2.load_state_dict(model.state_dict())
     model2.eval()
     for key, value1 in model.state_dict().items():
         value2 = model.state_dict()[key]
         assert torch.equal(value1, value2)
-    out2 = model2(x[n_id][nb.n_id], nb.adjs)
+    out2 = model2(x[n_id][nb.n_id], adjs)
     assert torch.abs((out - out2).mean()) < 0.01
 
 
