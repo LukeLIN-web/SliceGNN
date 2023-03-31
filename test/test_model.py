@@ -44,9 +44,8 @@ def test_acc():
                       num_layers=num_layers).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
     x, y = data.x.to(device), data.y.to(device)
-    print("Start training...")
-    for epoch in range(5):
-        model.train()
+    model.train()
+    for epoch in range(1):
         epoch_start = default_timer()
         for seeds in train_loader:
             n_id, batch_size, adjs = quiver_sampler.sample(seeds)
@@ -108,7 +107,7 @@ def test_real_dataset(device):
                       num_layers=num_layers).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
     x, y = data.x.to(device), data.y.to(device)
-    print("Start training...")
+
     for epoch in range(1):
         model.train()
         for batch_size, n_id, adjs in train_loader:
