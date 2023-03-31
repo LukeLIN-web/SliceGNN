@@ -39,10 +39,14 @@ class History(torch.nn.Module):
 
     @torch.no_grad()
     def pull(self, x: Tensor, n_id: Tensor) -> Tensor:
-        out = x.clone()
-        for j, id in enumerate(n_id):
-            if self.cached_nodes[id] == True:
-                out[j] = self.emb[id]
+        cached_nodes = self.cached_nodes[
+            n_id]  # get cached_nodes for the given node ids
+        emb = self.emb[n_id]  # get embeddings for the cached nodes
+        cached_nodes = cached_nodes.unsqueeze(1).expand(
+            x.size(0), x.size(1))  # expand to the same shape as x
+        out = torch.where(
+            cached_nodes, emb,
+            x)  # replace the values of cached nodes in x with their embeddings
         return out.to(device=x.device)
 
     @torch.no_grad()
