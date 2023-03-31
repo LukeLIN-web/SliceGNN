@@ -16,3 +16,4 @@ data/
 .coverage
 *.pt
 *.so
+.vscode/

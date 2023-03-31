@@ -198,4 +198,5 @@ def test_pull_and_push():
 
 
 if __name__ == "__main__":
-    test_pull_and_push()
+    # test_pull_and_push()
+    test_history_function()

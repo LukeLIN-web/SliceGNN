@@ -107,7 +107,6 @@ def test_real_dataset(device):
                       num_layers=num_layers).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
     x, y = data.x.to(device), data.y.to(device)
-
     for epoch in range(1):
         model.train()
         for batch_size, n_id, adjs in train_loader:
@@ -134,7 +133,6 @@ def test_real_dataset(device):
         out = model.inference(x, device, subgraph_loader)
     res = out.argmax(dim=-1) == y
     acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
-    # assert acc1 > 0.90, "Sanity check , Low training accuracy."
     acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
     acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
     print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
