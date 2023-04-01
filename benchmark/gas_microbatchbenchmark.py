@@ -13,7 +13,7 @@ from torch_geometric.loader import NeighborSampler
 import quiver
 from microGNN import History
 from microGNN.models import ScaleSAGE, criterion
-from microGNN.utils import get_dataset, get_nano_batch
+from microGNN.utils import cal_metrics, get_dataset, get_nano_batch
 
 log = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 @hydra.main(config_path="../conf", config_name="config", version_base="1.1")
 def train(conf):
     dataset_name = conf.dataset.name
-    params = conf.model.params
+    params = conf.model.params[dataset_name]
     print(OmegaConf.to_yaml(conf))
     dataset = get_dataset(dataset_name, conf.root)
     data = dataset[0]
@@ -40,9 +40,9 @@ def train(conf):
         )
     else:
         train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
-    gpu_num, per_gpu = params.num_train_worker, params.nano_pergpu
+    gpu_num, per_gpu, layers = conf.num_train_worker, conf.nano_pergpu, params.num_layers
     train_loader = torch.utils.data.DataLoader(train_idx,
-                                               batch_size=params.batch_size *
+                                               batch_size=conf.batch_size *
                                                gpu_num,
                                                num_workers=14,
                                                shuffle=False,
@@ -56,13 +56,14 @@ def train(conf):
         num_workers=14,
     )
     torch.manual_seed(12345)
-    model = ScaleSAGE(data.num_features, params.hidden_channels,
-                      dataset.num_classes, params.num_layers).to(rank)
+    model = ScaleSAGE(data.num_features, conf.hidden_channels,
+                      dataset.num_classes, layers).to(rank)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
     x, y = data.x.to(rank), data.y.to(rank)
-
-    for epoch in range(1, params.num_epoch + 1):
+    epochtimes = []
+    acc3 = -1
+    for epoch in range(1, conf.num_epoch + 1):
         model.train()
         epoch_start = default_timer()
         for seeds in train_loader:
@@ -72,8 +73,8 @@ def train(conf):
             nano_batchs = get_nano_batch(adjs, n_id, batch_size,
                                          gpu_num * per_gpu)
             histories = torch.nn.ModuleList([
-                History(len(n_id), params.hidden_channels, rank)
-                for _ in range(params.num_layers - 1)
+                History(len(n_id), conf.hidden_channels, rank)
+                for _ in range(layers - 1)
             ])
             for i, nb in enumerate(nano_batchs):
                 adjs = [adj.to(rank) for adj in nb.adjs]
@@ -84,13 +85,11 @@ def train(conf):
                     dataset_name)
                 loss.backward()
             optimizer.step()
-        print(
-            f"Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {default_timer() - epoch_start}"
-        )
-        print(
-            f"Maximum GPU memory usage: {torch.cuda.max_memory_allocated()/10**9} G bytes"
-        )
-        if epoch % 5 == 0:  # We evaluate on a single GPU for now
+        epochtime = default_timer() - epoch_start
+        if epoch > 1:
+            epochtimes.append(epochtime)
+        print(f"Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {epochtime}")
+        if epoch % 5 == 0:
             model.eval()
             with torch.no_grad():
                 out = model.inference(x, rank, subgraph_loader)
@@ -100,6 +99,12 @@ def train(conf):
             acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
             acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
             print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
+    maxgpu = torch.cuda.max_memory_allocated() / 10**9
+    metric = cal_metrics(epochtimes)
+    log.log(
+        logging.INFO,
+        f',{dataset_name},{gpu_num * per_gpu},{layers},{metric["mean"]:.2f}, {maxgpu:.2f}, {acc3:.4f}',
+    )
 
 
 if __name__ == "__main__":

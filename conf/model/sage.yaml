@@ -1,12 +1,16 @@
-name: sage
 params:
-  num_layers: 2
-  hidden_channels: 256
-  dropout: 0.5
-  batch_size: 1024
-  hop: [25, 10]
-  lr: 0.01
-  num_epoch: 5
-  nano_pergpu: 2
-  num_train_worker: 1
-  num_sample_worker: 1
+  reddit:
+    num_layers: 2
+    hop: [25, 10]
+
+  yelp:
+    num_layers: 2
+    hop: [25, 10]
+
+  ogbn-products:
+    num_layers: 3
+    hop: [10, 10,10]
+
+  papers100M:
+    num_layers: 3
+    hop: [15, 10, 10]
