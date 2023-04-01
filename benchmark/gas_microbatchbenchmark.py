@@ -7,6 +7,7 @@ from timeit import default_timer
 
 import hydra
 import torch
+from ogb.nodeproppred import Evaluator
 from omegaconf import OmegaConf
 from torch_geometric.loader import NeighborSampler
 
@@ -30,6 +31,14 @@ def train(conf):
                                                  sizes=params.hop,
                                                  device=0,
                                                  mode="GPU")
+    x = quiver.Feature(rank=0,
+                       device_list=[0],
+                       device_cache_size="4G",
+                       cache_policy="device_replicate",
+                       csr_topo=csr_topo)
+    feature = torch.zeros(data.x.shape)
+    feature[:] = data.x
+    x.from_cpu_tensor(feature)
     rank = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     if dataset_name == "ogbn-products" or dataset_name == "papers100M":
         split_idx = dataset.get_idx_split()
@@ -60,7 +69,7 @@ def train(conf):
                       dataset.num_classes, layers).to(rank)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
-    x, y = data.x.to(rank), data.y.to(rank)
+    y = data.y.to(rank)
     epochtimes = []
     acc3 = -1
     for epoch in range(1, conf.num_epoch + 1):
@@ -89,21 +98,24 @@ def train(conf):
         if epoch > 1:
             epochtimes.append(epochtime)
         print(f"Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {epochtime}")
-        if epoch % 5 == 0:
-            model.eval()
-            with torch.no_grad():
-                out = model.inference(x, rank, subgraph_loader)
-            res = out.argmax(dim=-1) == y
-            acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
-            assert acc1 > 0.90, "Sanity check , Low training accuracy."
-            acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
-            acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
-            print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
+    print("train finished")
+    if dataset_name == "ogbn-products" or dataset_name == "papers100M":
+        pass
+    else:
+        model.eval()
+        with torch.no_grad():
+            out = model.inference(x, rank, subgraph_loader)
+        res = out.argmax(dim=-1) == y  #  big graph may oom
+        acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
+        assert acc1 > 0.90, "Sanity check , Low training accuracy."
+        acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
+        acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
+        print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
     maxgpu = torch.cuda.max_memory_allocated() / 10**9
     metric = cal_metrics(epochtimes)
     log.log(
         logging.INFO,
-        f',{dataset_name},{gpu_num * per_gpu},{layers},{metric["mean"]:.2f}, {maxgpu:.2f}, {acc3:.4f}',
+        f',scalesage,{dataset_name},{gpu_num * per_gpu},{layers},{metric["mean"]:.2f}, {maxgpu:.2f}, {acc3:.4f}',
     )
 
 
