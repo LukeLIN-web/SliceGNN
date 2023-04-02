@@ -72,6 +72,7 @@ def train(conf):
     y = data.y.to(rank)
     epochtimes = []
     acc3 = -1
+    torch.cuda.reset_max_memory_allocated()
     for epoch in range(1, conf.num_epoch + 1):
         model.train()
         epoch_start = default_timer()
@@ -98,6 +99,7 @@ def train(conf):
         if epoch > 1:
             epochtimes.append(epochtime)
         print(f"Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {epochtime}")
+    maxgpu = torch.cuda.max_memory_allocated() / 10**9
     print("train finished")
     if dataset_name == "ogbn-products" or dataset_name == "papers100M":
         pass
@@ -105,13 +107,12 @@ def train(conf):
         model.eval()
         with torch.no_grad():
             out = model.inference(x, rank, subgraph_loader)
-        res = out.argmax(dim=-1) == y  #  big graph may oom
+        res = out.argmax(dim=-1) == y
         acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
         assert acc1 > 0.90, "Sanity check , Low training accuracy."
         acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
         acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
         print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
-    maxgpu = torch.cuda.max_memory_allocated() / 10**9
     metric = cal_metrics(epochtimes)
     log.log(
         logging.INFO,

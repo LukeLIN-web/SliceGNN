@@ -12,7 +12,7 @@ from torch_geometric.loader import NeighborSampler
 
 import quiver
 from microGNN.models import SAGE, criterion
-from microGNN.utils import cal_metrics, get_dataset, get_nano_batch
+from microGNN.utils import cal_metrics, get_dataset
 
 log = logging.getLogger(__name__)
 
@@ -78,18 +78,14 @@ def train(conf):
             optimizer.zero_grad()
             n_id, batch_size, adjs = quiver_sampler.sample(seeds)
             target_node = n_id[:batch_size]
-            nano_batchs = get_nano_batch(adjs, n_id, batch_size,
-                                         gpu_num * per_gpu)
-            for i, nano_batch in enumerate(nano_batchs):
-                nano_batch_adjs = [adj.to(rank) for adj in nano_batch.adjs]
-                out = model(x[n_id][nano_batch.n_id], nano_batch_adjs)
-                loss = criterion(
-                    out,
-                    y[target_node][i * (nano_batch.size):(i + 1) *
-                                   (nano_batch.size)],
-                    dataset_name,
-                )
-                loss.backward()
+            adjs = [adj.to(rank) for adj in adjs]
+            out = model(x[n_id], adjs)
+            loss = criterion(
+                out,
+                y[target_node],
+                dataset_name,
+            )
+            loss.backward()
             optimizer.step()
         epochtime = default_timer() - epoch_start
         if epoch > 1:
@@ -109,6 +105,7 @@ def train(conf):
         acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
         acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
         print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
+
     metric = cal_metrics(epochtimes)
     log.log(
         logging.INFO,
