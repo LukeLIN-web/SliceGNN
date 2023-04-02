@@ -39,6 +39,30 @@ Loader_reddit_pyg(){
     wait $pid
 }
 
-Loader_reddit_pyg 1
-Loader_reddit_pyg 2
-Loader_reddit_pyg 3
+run(){
+    pkill python
+    python $1 nano_pergpu=$2
+}
+
+gasbench(){
+    run gas_microbatchbenchmark.py 2
+    run gas_microbatchbenchmark.py 4
+    run gas_microbatchbenchmark.py 6
+    run gas_microbatchbenchmark.py 8
+}
+
+microbench(){
+    run microbatchbenchmark.py 2
+    run microbatchbenchmark.py 4
+    run microbatchbenchmark.py 6
+    run microbatchbenchmark.py 8
+}
+
+quiverbench(){
+    run quiver_microbatchbenchmark.py 2
+    run quiver_microbatchbenchmark.py 4
+    run quiver_microbatchbenchmark.py 6
+    run quiver_microbatchbenchmark.py 8
+}
+
+gasbench

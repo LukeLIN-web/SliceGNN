@@ -12,7 +12,7 @@ from torch_geometric.loader import NeighborSampler
 
 import quiver
 from microGNN.models import SAGE, criterion
-from microGNN.utils import cal_metrics, get_dataset
+from microGNN.utils import cal_metrics, check_memory, get_dataset
 
 log = logging.getLogger(__name__)
 
@@ -91,6 +91,7 @@ def train(conf):
         if epoch > 1:
             epochtimes.append(epochtime)
         print(f"Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {epochtime}")
+        check_memory()
     maxgpu = torch.cuda.max_memory_allocated() / 10**9
     print("train finished")
     if dataset_name == "ogbn-products" or dataset_name == "papers100M":
