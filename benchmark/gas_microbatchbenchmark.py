@@ -22,11 +22,15 @@ log = logging.getLogger(__name__)
 
 @hydra.main(config_path="../conf", config_name="config", version_base="1.1")
 def train(conf):
+    torch.cuda.reset_peak_memory_stats()
     dataset_name = conf.dataset.name
     params = conf.model.params[dataset_name]
     print(OmegaConf.to_yaml(conf))
     dataset = get_dataset(dataset_name, conf.root)
     data = dataset[0]
+    rank = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    torch.cuda.set_device(rank)
+    torch.manual_seed(12345)
     csr_topo = quiver.CSRTopo(data.edge_index)
     quiver_sampler = quiver.pyg.GraphSageSampler(csr_topo,
                                                  sizes=params.hop,
@@ -40,7 +44,7 @@ def train(conf):
     feature = torch.zeros(data.x.shape)
     feature[:] = data.x
     x.from_cpu_tensor(feature)
-    rank = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
     if dataset_name == "ogbn-products" or dataset_name == "papers100M":
         split_idx = dataset.get_idx_split()
         train_idx, valid_idx, test_idx = (
@@ -52,7 +56,7 @@ def train(conf):
         train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
     gpu_num, per_gpu, layers = conf.num_train_worker, conf.nano_pergpu, params.num_layers
     train_loader = torch.utils.data.DataLoader(train_idx,
-                                               batch_size=conf.batch_size *
+                                               batch_size=params.batch_size *
                                                gpu_num,
                                                num_workers=14,
                                                shuffle=False,
@@ -65,7 +69,7 @@ def train(conf):
         shuffle=False,
         num_workers=14,
     )
-    torch.manual_seed(12345)
+
     model = ScaleSAGE(data.num_features, conf.hidden_channels,
                       dataset.num_classes, layers).to(rank)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
@@ -73,7 +77,6 @@ def train(conf):
     y = data.y.to(rank)
     epochtimes = []
     acc3 = -1
-    torch.cuda.reset_max_memory_allocated()
     for epoch in range(1, conf.num_epoch + 1):
         model.train()
         epoch_start = default_timer()
@@ -103,8 +106,7 @@ def train(conf):
         if epoch > 1:
             epochtimes.append(epochtime)
         print(f"Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {epochtime}")
-        check_memory()
-    maxgpu = torch.cuda.max_memory_allocated() / 10**9
+    maxgpu = torch.cuda.max_memory_reserved() / 10**9
     print("train finished")
     if dataset_name == "ogbn-products" or dataset_name == "papers100M":
         evaluator = Evaluator(name=dataset_name)

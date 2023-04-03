@@ -53,7 +53,7 @@ class ScaleSAGE(ScalableGNN):
                 x = history.pull(x, n_id[:batch_size])
                 history.push(
                     x, n_id[:batch_size])  # Push all, including just pulled
-                x = F.dropout(x, p=0.5, training=self.training)
+                # x = F.dropout(x, p=0.5, training=self.training)
         return x.log_softmax(dim=-1)
 
     @torch.no_grad()

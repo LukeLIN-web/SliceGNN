@@ -74,7 +74,7 @@ def test_acc():
         out = model.inference(x, device, subgraph_loader)
     res = out.argmax(dim=-1) == y
     acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
-    assert acc1 > 0.90, "Sanity check , Low training accuracy."
+    assert acc1 > 0.94, "Sanity check , Low training accuracy."
     acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
     acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
     print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
@@ -127,7 +127,6 @@ def test_real_dataset(device):
                 loss.backward()
             optimizer.step()
             optimizer.zero_grad()
-        print(f"Epoch: {epoch:03d}, Loss: {loss:.4f}")
 
     model.eval()
     with torch.no_grad():
@@ -136,7 +135,6 @@ def test_real_dataset(device):
     acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
     acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
     acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
-    print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
 
 
 if __name__ == "__main__":

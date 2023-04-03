@@ -1,7 +1,5 @@
-name: sage
 hidden_channels: 256
 dropout: 0.5
-batch_size: 10240
 lr: 0.01
 num_epoch: 5
 nano_pergpu: 2

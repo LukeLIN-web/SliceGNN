@@ -41,7 +41,11 @@ Loader_reddit_pyg(){
 
 run(){
     pkill python
+    sleep 1
     python $1 nano_pergpu=$2
+    pid=$!
+    wait $pid
+    echo "$@"
 }
 
 gasbench(){
@@ -65,4 +69,5 @@ quiverbench(){
     run quiver_microbatchbenchmark.py 8
 }
 
-gasbench
+# gasbench
+microbench

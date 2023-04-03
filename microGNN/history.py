@@ -37,7 +37,6 @@ class History(torch.nn.Module):
         self._device = fn(torch.zeros(1)).device
         return self
 
-    @torch.no_grad()
     def pull(self, x: Tensor, n_id: Tensor) -> Tensor:
         cached_nodes = self.cached_nodes[
             n_id]  # get cached_nodes for the given node ids
@@ -49,7 +48,6 @@ class History(torch.nn.Module):
             x)  # replace the values of cached nodes in x with their embeddings
         return out.to(device=x.device)
 
-    @torch.no_grad()
     def push(
         self,
         x: Tensor,
