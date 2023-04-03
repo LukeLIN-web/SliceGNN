@@ -83,10 +83,12 @@ def train(conf):
             target_node = n_id[:batch_size]
             nano_batchs = get_nano_batch(adjs, n_id, batch_size,
                                          gpu_num * per_gpu)
+            # 516MB
             histories = torch.nn.ModuleList([
                 History(len(n_id), conf.hidden_channels, rank)
                 for _ in range(layers - 1)
             ])
+            #3116.0 MB
             for i, nb in enumerate(nano_batchs):
                 adjs = [adj.to(rank) for adj in nb.adjs]
                 nbid = nb.n_id.to(rank)
@@ -96,6 +98,7 @@ def train(conf):
                     dataset_name)
                 loss.backward()
             optimizer.step()
+        #11886.000000 MB
         epochtime = default_timer() - epoch_start
         if epoch > 1:
             epochtimes.append(epochtime)
@@ -104,7 +107,25 @@ def train(conf):
     maxgpu = torch.cuda.max_memory_allocated() / 10**9
     print("train finished")
     if dataset_name == "ogbn-products" or dataset_name == "papers100M":
-        pass
+        evaluator = Evaluator(name=dataset_name)
+        model.eval()
+        out = model.inference(x, rank, subgraph_loader)
+
+        y_true = y.cpu()
+        y_pred = out.argmax(dim=-1, keepdim=True)
+
+        acc1 = evaluator.eval({
+            'y_true': y_true[split_idx['train']],
+            'y_pred': y_pred[split_idx['train']],
+        })['acc']
+        acc2 = evaluator.eval({
+            'y_true': y_true[split_idx['valid']],
+            'y_pred': y_pred[split_idx['valid']],
+        })['acc']
+        acc3 = evaluator.eval({
+            'y_true': y_true[split_idx['test']],
+            'y_pred': y_pred[split_idx['test']],
+        })['acc']
     else:
         model.eval()
         with torch.no_grad():

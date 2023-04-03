@@ -7,6 +7,7 @@ from timeit import default_timer
 
 import hydra
 import torch
+from ogb.nodeproppred import Evaluator
 from omegaconf import OmegaConf
 from torch_geometric.loader import NeighborSampler
 
@@ -100,7 +101,25 @@ def train(conf):
     maxgpu = torch.cuda.max_memory_allocated() / 10**9
     print("train finished")
     if dataset_name == "ogbn-products" or dataset_name == "papers100M":
-        pass
+        evaluator = Evaluator(name=dataset_name)
+        model.eval()
+        out = model.inference(x, rank, subgraph_loader)
+
+        y_true = y.cpu()
+        y_pred = out.argmax(dim=-1, keepdim=True)
+
+        acc1 = evaluator.eval({
+            'y_true': y_true[split_idx['train']],
+            'y_pred': y_pred[split_idx['train']],
+        })['acc']
+        acc2 = evaluator.eval({
+            'y_true': y_true[split_idx['valid']],
+            'y_pred': y_pred[split_idx['valid']],
+        })['acc']
+        acc3 = evaluator.eval({
+            'y_true': y_true[split_idx['test']],
+            'y_pred': y_pred[split_idx['test']],
+        })['acc']
     else:
         model.eval()
         with torch.no_grad():
