@@ -120,7 +120,6 @@ def test_real_dataset(device):
             for i, nb in enumerate(nano_batchs):
                 adjs = [adj.to(device) for adj in nb.adjs]
                 nbid = nb.n_id.to(device)
-                print(x[n_id][nb.n_id].device)
                 out = model(x[n_id][nb.n_id], nbid, adjs, histories)
                 loss = F.cross_entropy(
                     out, y[target_node][i * (nb.size):(i + 1) * (nb.size)])

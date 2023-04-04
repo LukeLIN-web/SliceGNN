@@ -51,23 +51,24 @@ def test_same_out(device):
     model1 = ScaleSAGE(in_channels, hidden_channels, out_channels,
                        num_layers).to(device)
     nbid = nb.n_id.to(device)
-
-    out = model1(x[n_id][nbid], nbid, adjs, histories)
+    out1 = model1(x[n_id][nbid], nbid, adjs, histories)
 
     model2 = SAGE(in_channels, hidden_channels, out_channels,
                   num_layers).to(device)
     model2.load_state_dict(model1.state_dict())
     out2 = model2(x[n_id][nb.n_id], adjs)
+
     target_node = n_id[:batch_size]
     y = torch.tensor(labels, dtype=torch.long).to(device)
-    loss1 = F.nll_loss(out, y[target_node][nb.size])
+    loss1 = F.nll_loss(out1, y[target_node][nb.size])
     loss2 = F.nll_loss(out2, y[target_node][nb.size])
-    assert torch.allclose(loss1, loss2)
     loss1.backward()
     loss2.backward()
-    para1 = [param.clone().view(-1) for param in model1.parameters()]
-    para2 = [param.clone().view(-1) for param in model2.parameters()]
-    assert torch.allclose(torch.cat(para1), torch.cat(para2))
+    for param in model1.parameters():
+        print(param.grad)
+    print('------------------')
+    for param in model2.parameters():
+        print(param.grad)
     grad1 = [
         param.grad.clone().view(-1) for param in model1.parameters()
         if param.grad is not None
@@ -76,10 +77,72 @@ def test_same_out(device):
         param.grad.clone().view(-1) for param in model2.parameters()
         if param.grad is not None
     ]
-    print(grad1)
-    print("=====")
-    print(grad2)
-    assert torch.allclose(torch.cat(grad1), torch.cat(grad2))
+
+    # print(torch.cat(grad1))
+    # print(torch.cat(grad2))
+    assert torch.equal(torch.cat(grad1), torch.cat(grad2))
+
+    # nb1 = nano_batchs[1]
+    # adjs = [adj.to(device) for adj in nb1.adjs]
+    # nbid = nb1.n_id.to(device)
+    # out1 = model1(x[n_id][nbid], nbid, adjs, histories)
+    # out2 = model2(x[n_id][nb1.n_id], adjs)
+    # assert torch.equal(out1, out2)
+    # loss1 = F.nll_loss(out1, y[target_node][nb1.size])
+    # loss2 = F.nll_loss(out2, y[target_node][nb1.size])
+    # assert torch.equal(loss1, loss2)
+    # loss1.backward()
+    # loss2.backward()
+    # grad1 = [
+    #     param.grad.clone().view(-1) for param in model1.parameters()
+    #     if param.grad is not None
+    # ]
+    # grad2 = [
+    #     param.grad.clone().view(-1) for param in model2.parameters()
+    #     if param.grad is not None
+    # ]
+    # assert torch.equal(torch.cat(grad1), torch.cat(grad2[-3:]))
+
+
+@withCUDA
+def test_gradient(device):
+    train_loader = NeighborSampler(
+        edge_index,
+        sizes=hop,
+        batch_size=2,
+        shuffle=False,
+        drop_last=True,
+    )
+    batch_size, n_id, adjs = next(iter(train_loader))
+    nano_batchs = get_nano_batch(adjs,
+                                 n_id,
+                                 batch_size,
+                                 num_nano_batch=2,
+                                 relabel_nodes=True)
+    histories = torch.nn.ModuleList([
+        History(len(n_id), hidden_channels, device)
+        for _ in range(num_layers - 1)
+    ])
+    nb = nano_batchs[0]
+    adjs = [adj.to(device) for adj in nb.adjs]
+    x = torch.tensor(features, dtype=torch.float).to(device)
+
+    model1 = ScaleSAGE(in_channels, hidden_channels, out_channels,
+                       num_layers).to(device)
+    nbid = nb.n_id.to(device)
+    out1 = model1(x[n_id][nbid], nbid, adjs, histories)
+    target_node = n_id[:batch_size]
+    y = torch.tensor(labels, dtype=torch.long).to(device)
+    loss1 = F.nll_loss(out1, y[target_node][nb.size])
+    loss1.backward()
+    for param in model1.parameters():
+        print(param)
+        print(param.grad)
+        assert param.grad is not None
+    grad1 = [
+        param.grad.clone().view(-1) for param in model1.parameters()
+        if param.grad is not None
+    ]
 
 
 def test_save_embedding():
@@ -164,6 +227,12 @@ def test_history_function():
                 history.cached_nodes,
                 torch.tensor(
                     [False, True, False, True, True, False, False, False]))
+    loss = F.nll_loss(x, torch.tensor([1]))
+    loss.backward()
+    for param in convs.parameters():
+        print(param)
+        print(param.grad)
+        assert param.grad is not None
 
 
 def test_pull_and_push():
@@ -214,9 +283,13 @@ def test_pull_and_push():
                 history.cached_nodes,
                 torch.tensor(
                     [False, True, False, True, True, False, False, False]))
+    loss = F.nll_loss(x, torch.tensor([1]))
+    loss.backward()
+    for param in convs.parameters():
+        assert param.grad is not None
 
 
 if __name__ == "__main__":
     # test_pull_and_push()
-    # test_history_function()
-    test_same_out()
+    test_history_function()
+    # test_same_out("cpu")

@@ -37,17 +37,18 @@ class History(torch.nn.Module):
         self._device = fn(torch.zeros(1)).device
         return self
 
+    @torch.no_grad()
     def pull(self, x: Tensor, n_id: Tensor) -> Tensor:
         cached_nodes = self.cached_nodes[
             n_id]  # get cached_nodes for the given node ids
         emb = self.emb[n_id]  # get embeddings for the cached nodes
-        cached_nodes = cached_nodes.unsqueeze(1).expand(
+        mask = cached_nodes.unsqueeze(1).expand(
             x.size(0), x.size(1))  # expand to the same shape as x
-        out = torch.where(
-            cached_nodes, emb,
-            x)  # replace the values of cached nodes in x with their embeddings
-        return out.to(device=x.device)
+        x.masked_fill_(mask, 0)  # set the values of cached nodes in x to 0
+        x += emb  # add the embeddings of the cached nodes to x
+        return x
 
+    @torch.no_grad()
     def push(
         self,
         x: Tensor,
@@ -58,7 +59,9 @@ class History(torch.nn.Module):
             raise ValueError
 
         assert n_id.device == self.emb.device
-        self.emb[n_id] = x.to(self.emb.device)
+        tmp = x.detach()
+        assert id(x) != id(tmp)
+        self.emb[n_id] = tmp.to(self.emb.device)
         self.cached_nodes[n_id] = True
 
     def forward(self, *args, **kwargs):
