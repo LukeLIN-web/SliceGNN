@@ -23,8 +23,7 @@ class History(torch.nn.Module):
                                        dtype=torch.bool,
                                        device=device,
                                        pin_memory=pin_memory)
-
-        self._device = torch.device("cpu")
+        self.device = device  # memory device
 
         self.reset_parameters()
 
@@ -32,21 +31,16 @@ class History(torch.nn.Module):
         self.emb.fill_(0)
         self.cached_nodes.fill_(False)
 
-    def _apply(self, fn):
-        # Set the `_device` of the module without transfering `self.emb`.
-        self._device = fn(torch.zeros(1)).device
-        return self
-
-    @torch.no_grad()
     def pull(self, x: Tensor, n_id: Tensor) -> Tensor:
         cached_nodes = self.cached_nodes[
             n_id]  # get cached_nodes for the given node ids
         emb = self.emb[n_id]  # get embeddings for the cached nodes
         mask = cached_nodes.unsqueeze(1).expand(
             x.size(0), x.size(1))  # expand to the same shape as x
-        x.masked_fill_(mask, 0)  # set the values of cached nodes in x to 0
-        x += emb  # add the embeddings of the cached nodes to x
-        return x
+        out = x.clone()
+        out.masked_fill_(mask, 0)  # set the values of cached nodes in x to 0
+        out += emb  # add the embeddings of the cached nodes to x
+        return out
 
     @torch.no_grad()
     def push(

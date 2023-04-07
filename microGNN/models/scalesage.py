@@ -50,6 +50,7 @@ class ScaleSAGE(ScalableGNN):
             if i != self.num_layers - 1:  # last layer is not saved
                 x = F.relu(x)
                 history: History = histories[i]
+                print(x)
                 x = history.pull(x, n_id[:batch_size])
                 history.push(
                     x, n_id[:batch_size])  # Push all, including just pulled

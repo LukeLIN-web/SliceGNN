@@ -136,7 +136,6 @@ def test_gradient(device):
     loss1 = F.nll_loss(out1, y[target_node][nb.size])
     loss1.backward()
     for param in model1.parameters():
-        print(param)
         print(param.grad)
         assert param.grad is not None
     grad1 = [
@@ -291,5 +290,6 @@ def test_pull_and_push():
 
 if __name__ == "__main__":
     # test_pull_and_push()
-    test_history_function()
+    # test_history_function()
+    test_gradient("cpu")
     # test_same_out("cpu")
