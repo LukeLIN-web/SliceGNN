@@ -99,7 +99,7 @@ def train(conf):
         if epoch > 1:
             epochtimes.append(epochtime)
         print(f"Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {epochtime}")
-    maxgpu = torch.cuda.max_memory_reserved() / 10**9
+    maxgpu = torch.cuda.max_memory_allocated() / 10**9
     print("train finished")
     if dataset_name == "ogbn-products" or dataset_name == "papers100M":
         evaluator = Evaluator(name=dataset_name)

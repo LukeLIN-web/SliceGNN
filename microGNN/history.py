@@ -32,14 +32,13 @@ class History(torch.nn.Module):
         self.cached_nodes.fill_(False)
 
     def pull(self, x: Tensor, n_id: Tensor) -> Tensor:
-        cached_nodes = self.cached_nodes[
-            n_id]  # get cached_nodes for the given node ids
-        emb = self.emb[n_id]  # get embeddings for the cached nodes
+        cached_nodes = self.cached_nodes[n_id]
+        emb = self.emb[n_id]
         mask = cached_nodes.unsqueeze(1).expand(
             x.size(0), x.size(1))  # expand to the same shape as x
         out = x.clone()
-        out.masked_fill_(mask, 0)  # set the values of cached nodes in x to 0
-        out += emb  # add the embeddings of the cached nodes to x
+        out.masked_fill_(mask, 0)
+        out += emb
         return out
 
     @torch.no_grad()

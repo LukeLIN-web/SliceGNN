@@ -14,8 +14,7 @@ from torch_geometric.loader import NeighborSampler
 import quiver
 from microGNN import History
 from microGNN.models import ScaleSAGE, criterion
-from microGNN.utils import (cal_metrics, check_memory, get_dataset,
-                            get_nano_batch)
+from microGNN.utils import cal_metrics, get_dataset, get_nano_batch
 
 log = logging.getLogger(__name__)
 
@@ -28,16 +27,16 @@ def train(conf):
     print(OmegaConf.to_yaml(conf))
     dataset = get_dataset(dataset_name, conf.root)
     data = dataset[0]
-    rank = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    rank = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
     torch.cuda.set_device(rank)
     torch.manual_seed(12345)
     csr_topo = quiver.CSRTopo(data.edge_index)
     quiver_sampler = quiver.pyg.GraphSageSampler(csr_topo,
                                                  sizes=params.hop,
-                                                 device=0,
+                                                 device=1,
                                                  mode="GPU")
-    x = quiver.Feature(rank=0,
-                       device_list=[0],
+    x = quiver.Feature(rank=1,
+                       device_list=[1],
                        device_cache_size="4G",
                        cache_policy="device_replicate",
                        csr_topo=csr_topo)
@@ -106,7 +105,7 @@ def train(conf):
         if epoch > 1:
             epochtimes.append(epochtime)
         print(f"Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {epochtime}")
-    maxgpu = torch.cuda.max_memory_reserved() / 10**9
+    maxgpu = torch.cuda.max_memory_allocated() / 10**9
     print("train finished")
     if dataset_name == "ogbn-products" or dataset_name == "papers100M":
         evaluator = Evaluator(name=dataset_name)
