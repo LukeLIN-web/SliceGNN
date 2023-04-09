@@ -119,6 +119,7 @@ def train(conf):
             'y_true': y_true[split_idx['train']],
             'y_pred': y_pred[split_idx['train']],
         })['acc']
+        assert acc1 > 0.70, "Sanity check , Low training accuracy."
         acc2 = evaluator.eval({
             'y_true': y_true[split_idx['valid']],
             'y_pred': y_pred[split_idx['valid']],
@@ -127,6 +128,7 @@ def train(conf):
             'y_true': y_true[split_idx['test']],
             'y_pred': y_pred[split_idx['test']],
         })['acc']
+        print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
     else:
         model.eval()
         with torch.no_grad():

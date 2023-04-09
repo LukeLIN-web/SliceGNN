@@ -3,7 +3,7 @@ import shutil
 
 # Set the root directory
 # root_dir = "./multirun/2023-04-03/"
-root_dir = "./outputs/2023-04-03/"
+root_dir = "./outputs/2023-04-07/"
 # Loop through all subdirectories and files
 log_file = "./profilelogs/all_logs.csv"
 

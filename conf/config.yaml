@@ -7,7 +7,7 @@ num_train_worker: 1
 num_sample_worker: 1
 
 defaults:
-  - dataset: ogbn-products
+  - dataset: papers100M
   - model: sage
 
 root: "/data/ogb"

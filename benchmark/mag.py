@@ -9,6 +9,7 @@ import hydra
 import torch
 from ogb.nodeproppred import Evaluator
 from omegaconf import OmegaConf
+from torch_geometric.datasets import AttributedGraphDataset
 from torch_geometric.loader import NeighborSampler
 
 import quiver
@@ -24,12 +25,12 @@ def train(conf):
     dataset_name = conf.dataset.name
     params = conf.model.params[dataset_name]
     print(OmegaConf.to_yaml(conf))
-    dataset = get_dataset(dataset_name, conf.root)
+    dataset = AttributedGraphDataset(conf.root, "mag")
     data = dataset[0]
     rank = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
     torch.cuda.set_device(rank)
     torch.manual_seed(12345)
-    gpu_num, per_gpu, layers = conf.num_train_worker, conf.nano_pergpu, params.num_layers
+    gpu_num, layers = conf.num_train_worker, params.num_layers
     model = SAGE(data.num_features, conf.hidden_channels, dataset.num_classes,
                  layers).to(rank)
     csr_topo = quiver.CSRTopo(data.edge_index)
@@ -45,36 +46,23 @@ def train(conf):
     # feature = torch.zeros(data.x.shape)
     # feature[:] = data.x
     # x.from_cpu_tensor(feature)
-    x = data.x
     y = data.y
+    x = data.x
+    split_idx = dataset.get_idx_split()
+    train_idx, valid_idx, test_idx = (
+        split_idx["train"],
+        split_idx["valid"],
+        split_idx["test"],
+    )
 
-    if dataset_name == "ogbn-products" or dataset_name == "papers100M":
-        split_idx = dataset.get_idx_split()
-        train_idx, valid_idx, test_idx = (
-            split_idx["train"],
-            split_idx["valid"],
-            split_idx["test"],
-        )
-    else:
-        train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
     train_loader = torch.utils.data.DataLoader(train_idx,
                                                batch_size=params.batch_size *
                                                gpu_num,
                                                num_workers=14,
                                                shuffle=False,
                                                drop_last=True)
-    subgraph_loader = NeighborSampler(
-        data.edge_index,
-        node_idx=None,
-        sizes=[-1],
-        batch_size=2048,
-        shuffle=False,
-        num_workers=14,
-    )
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-    y = data.y.to(rank)
     epochtimes = []
-    acc3 = -1
     for epoch in range(1, conf.num_epoch + 1):
         model.train()
         epoch_start = default_timer()
@@ -86,7 +74,7 @@ def train(conf):
             out = model(x[n_id], adjs)
             loss = criterion(
                 out,
-                y[target_node],
+                y[target_node].to(rank),
                 dataset_name,
             )
             loss.backward()
@@ -97,46 +85,6 @@ def train(conf):
         print(f"Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {epochtime}")
     maxgpu = torch.cuda.max_memory_allocated() / 10**9
     print("train finished")
-
-    if dataset_name == "ogbn-products":
-        evaluator = Evaluator(name=dataset_name)
-        model.eval()
-        out = model.inference(x, rank, subgraph_loader)
-
-        y_true = y.cpu()
-        y_pred = out.argmax(dim=-1, keepdim=True)
-
-        acc1 = evaluator.eval({
-            'y_true': y_true[split_idx['train']],
-            'y_pred': y_pred[split_idx['train']],
-        })['acc']
-        acc2 = evaluator.eval({
-            'y_true': y_true[split_idx['valid']],
-            'y_pred': y_pred[split_idx['valid']],
-        })['acc']
-        acc3 = evaluator.eval({
-            'y_true': y_true[split_idx['test']],
-            'y_pred': y_pred[split_idx['test']],
-        })['acc']
-        print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
-    elif dataset_name == "papers100M":
-        pass
-    else:
-        model.eval()
-        with torch.no_grad():
-            out = model.inference(x, rank, subgraph_loader)
-        res = out.argmax(dim=-1) == y  #  big graph may oom
-        acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
-        assert acc1 > 0.90, "Sanity check , Low training accuracy."
-        acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
-        acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
-        print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
-
-    metric = cal_metrics(epochtimes)
-    log.log(
-        logging.INFO,
-        f',origin,{dataset_name},{gpu_num * per_gpu},{layers},{metric["mean"]:.2f}, {maxgpu:.2f}, {acc3:.4f}',
-    )
 
 
 if __name__ == "__main__":

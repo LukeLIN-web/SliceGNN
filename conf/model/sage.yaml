@@ -16,5 +16,5 @@ params:
 
   papers100M:
     num_layers: 3
-    hop: [15, 10, 10]
+    hop: [15, 10, 5]
     batch_size: 1024
