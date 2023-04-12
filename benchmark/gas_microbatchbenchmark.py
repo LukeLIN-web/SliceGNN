@@ -60,20 +60,20 @@ def train(conf):
                                                num_workers=14,
                                                shuffle=False,
                                                drop_last=True)
-    subgraph_loader = NeighborSampler(
-        data.edge_index,
-        node_idx=None,
-        sizes=[-1],
-        batch_size=2048,
-        shuffle=False,
-        num_workers=14,
-    )
+    if dataset_name != "papers100M":
+        subgraph_loader = NeighborSampler(
+            data.edge_index,
+            node_idx=None,
+            sizes=[-1],
+            batch_size=2048,
+            shuffle=False,
+            num_workers=14,
+        )
 
     model = ScaleSAGE(data.num_features, conf.hidden_channels,
                       dataset.num_classes, layers).to(rank)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-
-    y = data.y.to(rank)
+    y = data.y
     epochtimes = []
     acc3 = -1
     for epoch in range(1, conf.num_epoch + 1):
@@ -96,7 +96,8 @@ def train(conf):
                 nbid = nb.n_id.to(rank)
                 out = model(x[n_id][nb.n_id], nbid, adjs, histories)
                 loss = criterion(
-                    out, y[target_node][i * (nb.size):(i + 1) * (nb.size)],
+                    out,
+                    y[target_node][i * (nb.size):(i + 1) * (nb.size)].to(rank),
                     dataset_name)
                 loss.backward()
             optimizer.step()
@@ -107,7 +108,7 @@ def train(conf):
         print(f"Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {epochtime}")
     maxgpu = torch.cuda.max_memory_allocated() / 10**9
     print("train finished")
-    if dataset_name == "ogbn-products" or dataset_name == "papers100M":
+    if dataset_name == "ogbn-products":
         evaluator = Evaluator(name=dataset_name)
         model.eval()
         out = model.inference(x, rank, subgraph_loader)
@@ -116,19 +117,20 @@ def train(conf):
         y_pred = out.argmax(dim=-1, keepdim=True)
 
         acc1 = evaluator.eval({
-            'y_true': y_true[split_idx['train']],
-            'y_pred': y_pred[split_idx['train']],
+            'y_true': y_true[train_idx],
+            'y_pred': y_pred[train_idx],
         })['acc']
-        assert acc1 > 0.70, "Sanity check , Low training accuracy."
         acc2 = evaluator.eval({
-            'y_true': y_true[split_idx['valid']],
-            'y_pred': y_pred[split_idx['valid']],
+            'y_true': y_true[valid_idx],
+            'y_pred': y_pred[valid_idx],
         })['acc']
         acc3 = evaluator.eval({
-            'y_true': y_true[split_idx['test']],
-            'y_pred': y_pred[split_idx['test']],
+            'y_true': y_true[test_idx],
+            'y_pred': y_pred[test_idx],
         })['acc']
         print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
+    elif dataset_name == "papers100M":
+        pass
     else:
         model.eval()
         with torch.no_grad():

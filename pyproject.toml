@@ -16,7 +16,7 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
 ]
 dependencies = [
-    "ogb", "hydra-core","pytest-runner","pytest", "pytest-cov"
+    "ogb", "hydra-core","pytest"
 ]
 
 [tool.setuptools.packages.find]

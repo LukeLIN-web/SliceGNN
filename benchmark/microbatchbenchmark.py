@@ -59,20 +59,20 @@ def train(conf):
                                                num_workers=14,
                                                shuffle=False,
                                                drop_last=True)
-    subgraph_loader = NeighborSampler(
-        data.edge_index,
-        node_idx=None,
-        sizes=[-1],
-        batch_size=2048,
-        shuffle=False,
-        num_workers=14,
-    )
+    if dataset_name != "papers100M":
+        subgraph_loader = NeighborSampler(
+            data.edge_index,
+            node_idx=None,
+            sizes=[-1],
+            batch_size=2048,
+            shuffle=False,
+            num_workers=14,
+        )
 
     model = SAGE(data.num_features, conf.hidden_channels, dataset.num_classes,
                  layers).to(rank)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-
-    y = data.y.to(rank)
+    y = data.y
     epochtimes = []
     acc3 = -1
     for epoch in range(1, conf.num_epoch + 1):
@@ -90,7 +90,7 @@ def train(conf):
                 loss = criterion(
                     out,
                     y[target_node][i * (nano_batch.size):(i + 1) *
-                                   (nano_batch.size)],
+                                   (nano_batch.size)].to(rank),
                     dataset_name,
                 )
                 loss.backward()

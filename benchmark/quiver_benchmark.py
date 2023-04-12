@@ -26,6 +26,11 @@ def train(conf):
     print(OmegaConf.to_yaml(conf))
     dataset = get_dataset(dataset_name, conf.root)
     data = dataset[0]
+    ### Randomly drop some edges to avoid segmentation fault
+    from torch_geometric.utils import dropout_edge, to_undirected
+    data.edge_index, _ = dropout_edge(data.edge_index, p=0.4)
+    data.edge_index = to_undirected(data.edge_index, data.num_nodes)
+
     rank = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
     torch.cuda.set_device(rank)
     torch.manual_seed(12345)
@@ -63,16 +68,16 @@ def train(conf):
                                                num_workers=14,
                                                shuffle=False,
                                                drop_last=True)
-    subgraph_loader = NeighborSampler(
-        data.edge_index,
-        node_idx=None,
-        sizes=[-1],
-        batch_size=2048,
-        shuffle=False,
-        num_workers=14,
-    )
+    if dataset_name != "papers100M":
+        subgraph_loader = NeighborSampler(
+            data.edge_index,
+            node_idx=None,
+            sizes=[-1],
+            batch_size=2048,
+            shuffle=False,
+            num_workers=14,
+        )
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-    y = data.y.to(rank)
     epochtimes = []
     acc3 = -1
     for epoch in range(1, conf.num_epoch + 1):
@@ -83,10 +88,10 @@ def train(conf):
             n_id, batch_size, adjs = quiver_sampler.sample(seeds)
             target_node = n_id[:batch_size]
             adjs = [adj.to(rank) for adj in adjs]
-            out = model(x[n_id], adjs)
+            out = model(x[n_id].to(rank), adjs)
             loss = criterion(
                 out,
-                y[target_node],
+                y[target_node].to(rank),
                 dataset_name,
             )
             loss.backward()
@@ -107,16 +112,16 @@ def train(conf):
         y_pred = out.argmax(dim=-1, keepdim=True)
 
         acc1 = evaluator.eval({
-            'y_true': y_true[split_idx['train']],
-            'y_pred': y_pred[split_idx['train']],
+            'y_true': y_true[train_idx],
+            'y_pred': y_pred[train_idx],
         })['acc']
         acc2 = evaluator.eval({
-            'y_true': y_true[split_idx['valid']],
-            'y_pred': y_pred[split_idx['valid']],
+            'y_true': y_true[valid_idx],
+            'y_pred': y_pred[valid_idx],
         })['acc']
         acc3 = evaluator.eval({
-            'y_true': y_true[split_idx['test']],
-            'y_pred': y_pred[split_idx['test']],
+            'y_true': y_true[test_idx],
+            'y_pred': y_pred[test_idx],
         })['acc']
         print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
     elif dataset_name == "papers100M":
