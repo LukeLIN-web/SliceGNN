@@ -5,6 +5,7 @@ from torch_geometric.loader import NeighborLoader, NeighborSampler
 
 from microGNN.models import SAGE
 from microGNN.utils import get_loader_nano_batch, get_nano_batch, slice_adj
+from microGNN.utils.common_class import Adj, Nanobatch
 
 hop = [-1, -1]
 num_layers = 2
@@ -40,6 +41,54 @@ def test_slice_adj():
     assert subset.tolist() == [0, 6, 1, 5]
     assert edge_index.tolist() == [[2, 3], [0, 1]]
     assert edge_mask.tolist() == [True, False, False, True]
+
+
+def test_cache_nano():
+    n_id = torch.arange(node_num)
+    edge1 = torch.tensor([[2, 3, 3, 4], [0, 0, 1, 1]])
+    adjs1 = Adj(edge1, None, (5, 2))
+    edge2 = torch.tensor([[2, 3, 3, 4, 5, 6, 7], [0, 0, 1, 1, 2, 3, 4]])
+    adjs2 = Adj(edge2, None, (8, 5))
+    adjs = [adjs2, adjs1]
+    num_nano_batch = 2
+    batch_size = 2
+    cached_nodes = torch.full((num_layers, node_num, 2),
+                              False,
+                              dtype=torch.bool)
+    mod = batch_size % num_nano_batch
+    if mod != 0:
+        batch_size -= mod
+    assert batch_size % num_nano_batch == 0, "batch_size must be divisible by num_nano_batch"
+    assert isinstance(adjs, list), "adjs must be a list"
+    adjs.reverse()
+    nano_batch_size = batch_size // num_nano_batch
+    nano_batchs = []
+    for i in range(num_nano_batch):
+        sub_nid = n_id[i * nano_batch_size:(i + 1) * nano_batch_size]
+        subadjs = []
+        for j, adj in enumerate(adjs):
+            target_size = len(sub_nid)
+            sub_nid, sub_adjs, edge_mask = slice_adj(
+                sub_nid,
+                adj.edge_index,
+                relabel_nodes=True,
+            )
+            for i, id in enumerate(sub_nid):
+                if cached_nodes[j][id][0] == False:
+                    cached_nodes[j][id][0] = True
+                elif cached_nodes[j][id][0] == True:
+                    cached_nodes[j][id][1] = True
+            subadjs.append(Adj(sub_adjs, None, (len(sub_nid), target_size)))
+        subadjs.reverse()  # O(n) 大的在前面
+        nano_batchs.append(Nanobatch(sub_nid, nano_batch_size, subadjs))
+    indices = torch.nonzero(cached_nodes[:, :, 1], as_tuple=True)
+    l = [[] for i in range(num_layers)]
+    for i, j in zip(*indices):
+        l[i].append(j)
+    l = [torch.tensor(layer_indices) for layer_indices in l]
+    assert l[0].tolist() == [3]
+    assert l[1].tolist() == [3, 6]
+    # return nano_batchs, cached_id
 
 
 def test_mapping():
@@ -144,5 +193,4 @@ def test_forward():
 
 if __name__ == "__main__":
     # test_mapping()
-    # test_slice_adj()
-    test_loader_mapping()
+    test_slice_adj()
