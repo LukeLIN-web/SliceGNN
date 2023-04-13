@@ -17,7 +17,8 @@ def prune_computation_graph(n_id: Tensor, nb_adjs: List,
     for i in range(1, len(adjs)):
         adj = adjs[i]
         layer_idx = torch.arange(len(layernode))  # nano batch id
-        cached_nodes_mask = histories[i - 1].cached_nodes[layernode]
+        print(histories[i - 1].cached_nodes)
+        cached_nodes_mask = histories[i - 1].cached_nodes[[layernode]]
         sub_nid = layer_idx[~cached_nodes_mask]
         layernode, sub_adjs, edge_mask = slice_adj(sub_nid,
                                                    adj.edge_index,

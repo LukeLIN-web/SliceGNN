@@ -5,6 +5,7 @@ from torch import Tensor
 from torch_geometric.data import Data
 from torch_geometric.utils.num_nodes import maybe_num_nodes
 
+from microGNN import History
 from microGNN.utils.common_class import Adj, Nanobatch
 
 torch.set_printoptions(profile="full")
@@ -117,7 +118,7 @@ def get_nano_batch(
     if not isinstance(adjs, list):
         adjs = [adjs]
     adjs.reverse()
-    nano_batch_size = batch_size // num_nano_batch  # TODO: padding last batch
+    nano_batch_size = batch_size // num_nano_batch
     nano_batchs = []
     for i in range(num_nano_batch):
         sub_nid = n_id[i * nano_batch_size:(i + 1) *
@@ -153,7 +154,7 @@ def get_loader_nano_batch(batch: Data, num_nano_batch: int,
     if mod != 0:
         batch_size -= mod
     assert batch_size % num_nano_batch == 0
-    nano_batch_size = batch_size // num_nano_batch  # TODO: padding last batch
+    nano_batch_size = batch_size // num_nano_batch
     nano_batchs = []
     for i in range(num_nano_batch):
         sub_nid = n_id[i * nano_batch_size:(i + 1) *
@@ -208,3 +209,60 @@ def get_nano_batch_withlayer(
             subnids.append(sub_nid)  # layer 0 is interal
         nanobatchs.append(subnids)
     return nanobatchs
+
+
+def get_nano_batch_histories(
+    adjs: List[Adj],
+    n_id: Tensor,
+    batch_size: int,
+    node_num: int,
+    num_nano_batch: int = 2,
+    relabel_nodes: bool = True,
+):
+    r"""Create a list of `num_nano_batch` nanobatches
+    from a list of adjacency matrices `adjs`.
+
+    Args:
+        adjs (List[Adj]): List of each layer adjacency matrices.
+        n_id (torch.Tensor): Node indices.
+        batch_size: mini batch size
+        num_nano_batch:  nano batch number
+
+    :rtype: List[List[Tensor,int,list]]
+    """
+    assert (batch_size >= num_nano_batch
+            ), "batch_size must be bigger than num_nano_batch"  # noqa
+    n_id = torch.arange(len(n_id))  # relabel for mini batch
+    mod = batch_size % num_nano_batch
+    if mod != 0:
+        batch_size -= mod
+    assert batch_size % num_nano_batch == 0, "batch_size must be divisible by num_nano_batch"
+    assert isinstance(adjs, list), "adjs must be a list"
+    adjs.reverse()
+    nano_batch_size = batch_size // num_nano_batch
+    nano_batchs = []
+    num_layers = len(adjs)
+    cached_id = [[] for i in range(num_layers)]
+    cached_nodes = torch.full((num_layers - 1, node_num),
+                              False,
+                              dtype=torch.bool)
+    for i in range(num_nano_batch):
+        sub_nid = n_id[i * nano_batch_size:(i + 1) * nano_batch_size]
+        subadjs = []
+        for j, adj in enumerate(adjs):
+            target_size = len(sub_nid)
+            sub_nid, sub_adjs, edge_mask = slice_adj(
+                sub_nid,
+                adj.edge_index,
+                relabel_nodes=True,
+            )
+            if j != num_layers - 1:
+                for id in sub_nid:
+                    if cached_nodes[j][id] == False:
+                        cached_nodes[j][id] = True
+                    elif cached_nodes[j][id] == True:
+                        cached_id[j].append(id)
+            subadjs.append(Adj(sub_adjs, None, (len(sub_nid), target_size)))
+        subadjs.reverse()  # O(n) 大的在前面
+        nano_batchs.append(Nanobatch(sub_nid, nano_batch_size, subadjs))
+    return nano_batchs, cached_id
