@@ -52,9 +52,7 @@ def test_cache_nano():
     adjs = [adjs2, adjs1]
     num_nano_batch = 2
     batch_size = 2
-    cached_nodes = torch.full((num_layers, node_num, 2),
-                              False,
-                              dtype=torch.bool)
+
     mod = batch_size % num_nano_batch
     if mod != 0:
         batch_size -= mod
@@ -64,6 +62,7 @@ def test_cache_nano():
     nano_batch_size = batch_size // num_nano_batch
     nano_batchs = []
     cached_id = [[] for i in range(num_layers)]
+    cached_nodes = torch.full((num_layers, node_num), False, dtype=torch.bool)
     for i in range(num_nano_batch):
         sub_nid = n_id[i * nano_batch_size:(i + 1) * nano_batch_size]
         subadjs = []
@@ -74,16 +73,16 @@ def test_cache_nano():
                 adj.edge_index,
                 relabel_nodes=True,
             )
-            for i, id in enumerate(sub_nid):
-                if cached_nodes[j][id][0] == False:
-                    cached_nodes[j][id][0] = True
-                elif cached_nodes[j][id][0] == True:
-                    cached_id[j].append(id)
+            if j != num_layers - 1:
+                for id in sub_nid:
+                    if cached_nodes[j][id] == False:
+                        cached_nodes[j][id] = True
+                    elif cached_nodes[j][id] == True:
+                        cached_id[j].append(id)
             subadjs.append(Adj(sub_adjs, None, (len(sub_nid), target_size)))
         subadjs.reverse()  # O(n) 大的在前面
         nano_batchs.append(Nanobatch(sub_nid, nano_batch_size, subadjs))
     assert cached_id[0] == [3]
-    assert cached_id[1] == [3, 6]
 
 
 def test_mapping():
