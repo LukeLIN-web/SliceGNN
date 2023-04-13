@@ -1,9 +1,6 @@
 import torch
-from torch_geometric.loader import NeighborSampler
-from torch_geometric.nn.conv import SAGEConv
 
 from microGNN import History
-from microGNN.models import SAGE, ScaleSAGE
 from microGNN.prune import prune_computation_graph
 from microGNN.utils import get_nano_batch
 from microGNN.utils.common_class import Adj, Nanobatch

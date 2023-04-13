@@ -62,7 +62,9 @@ def test_cache_nano():
     nano_batch_size = batch_size // num_nano_batch
     nano_batchs = []
     cached_id = [[] for i in range(num_layers)]
-    cached_nodes = torch.full((num_layers, node_num), False, dtype=torch.bool)
+    cached_nodes = torch.full((num_layers - 1, node_num),
+                              False,
+                              dtype=torch.bool)
     for i in range(num_nano_batch):
         sub_nid = n_id[i * nano_batch_size:(i + 1) * nano_batch_size]
         subadjs = []
