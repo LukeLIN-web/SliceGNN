@@ -63,6 +63,7 @@ def test_cache_nano():
     adjs.reverse()
     nano_batch_size = batch_size // num_nano_batch
     nano_batchs = []
+    cached_id = [[] for i in range(num_layers)]
     for i in range(num_nano_batch):
         sub_nid = n_id[i * nano_batch_size:(i + 1) * nano_batch_size]
         subadjs = []
@@ -77,18 +78,12 @@ def test_cache_nano():
                 if cached_nodes[j][id][0] == False:
                     cached_nodes[j][id][0] = True
                 elif cached_nodes[j][id][0] == True:
-                    cached_nodes[j][id][1] = True
+                    cached_id[j].append(id)
             subadjs.append(Adj(sub_adjs, None, (len(sub_nid), target_size)))
         subadjs.reverse()  # O(n) 大的在前面
         nano_batchs.append(Nanobatch(sub_nid, nano_batch_size, subadjs))
-    indices = torch.nonzero(cached_nodes[:, :, 1], as_tuple=True)
-    l = [[] for i in range(num_layers)]
-    for i, j in zip(*indices):
-        l[i].append(j)
-    l = [torch.tensor(layer_indices) for layer_indices in l]
-    assert l[0].tolist() == [3]
-    assert l[1].tolist() == [3, 6]
-    # return nano_batchs, cached_id
+    assert cached_id[0] == [3]
+    assert cached_id[1] == [3, 6]
 
 
 def test_mapping():
