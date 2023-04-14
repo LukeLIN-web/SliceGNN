@@ -17,12 +17,50 @@ hidden_channels = 4
 out_channels = 2
 node_num = 8
 features = [[i for j in range(in_channels)] for i in range(node_num)]
+labels = [[i % 2] for i in range(node_num)]
 # yapf: disable
 edge_index = torch.tensor([[2, 3, 3, 4, 5, 6, 7],
                             [0, 0, 1, 1, 2, 3, 4]], dtype=torch.long) # noqa
 # yapf: enable
 torch.manual_seed(23)
 mb_n_id = torch.arange(node_num)
+from torch_geometric.testing.decorators import withCUDA
+
+
+@withCUDA
+def test_gradient(device):
+    train_loader = NeighborSampler(
+        edge_index,
+        sizes=hop,
+        batch_size=2,
+        shuffle=False,
+        drop_last=True,
+    )
+    batch_size, n_id, adjs = next(iter(train_loader))
+    nano_batchs, cached_id = get_nano_batch_histories(adjs,
+                                                      mb_n_id,
+                                                      batch_size=2,
+                                                      node_num=node_num,
+                                                      num_nano_batch=2,
+                                                      relabel_nodes=True)
+    histories = torch.nn.ModuleList([
+        History(cacheid, node_num, hidden_channels, device)
+        for cacheid in cached_id
+    ])
+    nb = nano_batchs[0]
+    adjs = [adj.to(device) for adj in nb.adjs]
+    x = torch.tensor(features, dtype=torch.float).to(device)
+
+    model1 = ScaleSAGE(in_channels, hidden_channels, out_channels,
+                       num_layers).to(device)
+    nbid = nb.n_id.to(device)
+    out1 = model1(x[n_id][nbid], nbid, adjs, histories)
+    target_node = n_id[:batch_size]
+    y = torch.tensor(labels, dtype=torch.long).to(device)
+    loss1 = F.nll_loss(out1, y[target_node][nb.size])
+    loss1.backward()
+    for param in model1.parameters():
+        assert param.grad is not None
 
 
 def test_small_save_embedding():
@@ -103,7 +141,7 @@ def test_small_histfunction():
             history = histories[i]
             interid = get_intersection(nb.n_id[:batch_size],
                                        history.global_idx)
-            history.pull(x, interid, nb.n_id[:batch_size])
+            x = history.pull(x, interid, nb.n_id[:batch_size])
             assert not torch.equal(x[0], torch.tensor([3.3, 3.4, 3.5, 3.6]))
             assert torch.equal(x[1], torch.tensor([3.3, 3.4, 3.5, 3.6]))
             history.push(x, interid)
@@ -156,13 +194,14 @@ def test_small_pull():
             history = histories[i]
             inter_id = get_intersection(nb.n_id[:batch_size],
                                         history.global_idx)
+            out = x.clone()
             for j, id in enumerate(inter_id):
                 embidx = torch.where(history.global_idx == id)[0]
                 emb = history.emb[embidx]
                 xidx = torch.where(nb.n_id[:batch_size] == id)[0]
-                x[xidx] = emb
-            assert not torch.equal(x[0], torch.tensor([3.3, 3.4, 3.5, 3.6]))
-            assert torch.equal(x[1], torch.tensor([3.3, 3.4, 3.5, 3.6]))
+                out[xidx] = emb
+            assert not torch.equal(out[0], torch.tensor([3.3, 3.4, 3.5, 3.6]))
+            assert torch.equal(out[1], torch.tensor([3.3, 3.4, 3.5, 3.6]))
     loss = F.nll_loss(x, torch.tensor([1]))
     loss.backward()
     for param in convs.parameters():

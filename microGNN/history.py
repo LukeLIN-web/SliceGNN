@@ -49,11 +49,13 @@ class History(torch.nn.Module):
         self.push(x, inter_id)
 
     def pull(self, x: Tensor, inter_id: Tensor, nid) -> Tensor:
+        out = x.clone()
         for id in inter_id:
             embidx = torch.where(self.global_idx == id)[0]
             emb = self.emb[embidx]
             xidx = torch.where(nid == id)[0]
-            x[xidx] = emb
+            out[xidx] = emb
+        return out
 
     @torch.no_grad()
     def push(self, x: Tensor, inter_id: Tensor):
