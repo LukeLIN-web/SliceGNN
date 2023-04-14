@@ -53,7 +53,8 @@ class ScaleSAGE(ScalableGNN):
                 history: History = histories[i]
                 interid = get_intersection(n_id[:batch_size],
                                            history.global_idx)
-                history.pull_push(x, interid)
+                history.pull(x, interid, n_id[:batch_size])
+                history.push(x, interid)
                 # x = F.dropout(x, p=0.5, training=self.training)
         return x.log_softmax(dim=-1)
 

@@ -50,20 +50,18 @@ def test_small_save_embedding():
     nb = nano_batchs[0]
     x = torch.tensor(features, dtype=torch.float)
     model(x[n_id][nb.n_id], nb.n_id, nb.adjs, histories)
-    print(histories[0].emb)
-    assert not torch.any(torch.eq(histories[0].emb, 0.0))
-    # print(histories[0].cached_nodes)
-    # assert torch.equal(
-    #     histories[0].cached_nodes,
-    #     torch.tensor([False, False, False, True, False, False, False, False]))
-    # histories[0].reset_parameters()
+    assert not torch.all(x == 0)
+    assert torch.equal(
+        histories[0].cached_nodes,
+        torch.tensor([False, False, False, True, False, False, False, False]))
+    histories[0].reset_parameters()
 
-    # nb = nano_batchs[1]
-    # model(x[n_id][nb.n_id], nb.n_id, nb.adjs, histories)
-    # assert not torch.any(torch.eq(histories[0].emb, 0.0))
-    # assert torch.equal(
-    #     histories[0].cached_nodes,
-    #     torch.tensor([False, False, False, True, False, False, False, False]))
+    nb = nano_batchs[1]
+    model(x[n_id][nb.n_id], nb.n_id, nb.adjs, histories)
+    assert not torch.all(x == 0)
+    assert torch.equal(
+        histories[0].cached_nodes,
+        torch.tensor([False, False, False, True, False, False, False, False]))
 
 
 def test_small_histfunction():
@@ -105,7 +103,8 @@ def test_small_histfunction():
             history = histories[i]
             interid = get_intersection(nb.n_id[:batch_size],
                                        history.global_idx)
-            history.pull(x, interid)
+            history.pull(x, interid, nb.n_id[:batch_size])
+            assert not torch.equal(x[0], torch.tensor([3.3, 3.4, 3.5, 3.6]))
             assert torch.equal(x[1], torch.tensor([3.3, 3.4, 3.5, 3.6]))
             history.push(x, interid)
             assert torch.equal(
@@ -155,9 +154,9 @@ def test_small_pull():
                      adj.edge_index)  # compute the non cached nodes embedding
         if i != num_layers - 1:  # last layer is not saved
             history = histories[i]
-            interid = get_intersection(nb.n_id[:batch_size],
-                                       history.global_idx)
-            for j, id in enumerate(interid):
+            inter_id = get_intersection(nb.n_id[:batch_size],
+                                        history.global_idx)
+            for j, id in enumerate(inter_id):
                 embidx = torch.where(history.global_idx == id)[0]
                 emb = history.emb[embidx]
                 xidx = torch.where(nb.n_id[:batch_size] == id)[0]

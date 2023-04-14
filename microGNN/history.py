@@ -31,11 +31,12 @@ class History(torch.nn.Module):
                                device=device,
                                pin_memory=pin_memory)
 
-        self.cached_nodes = torch.full((num_embeddings, ),
-                                       False,
-                                       dtype=torch.bool,
-                                       device=device,
-                                       pin_memory=pin_memory)
+        self.cached_nodes = torch.full(
+            (num_embeddings, ),
+            False,
+            dtype=torch.bool,
+            device=device,
+            pin_memory=pin_memory)  # push embedding or not
 
         self.reset_parameters()
 
@@ -47,11 +48,12 @@ class History(torch.nn.Module):
         self.pull(x, inter_id)
         self.push(x, inter_id)
 
-    def pull(self, x: Tensor, inter_id: Tensor) -> Tensor:
-        cached_idxs = self.global_idx == inter_id
-        cached_idxs = torch.where(cached_idxs)  # select true index
-        cached_embs = self.emb[cached_idxs]
-        x.copy_(cached_embs)
+    def pull(self, x: Tensor, inter_id: Tensor, nid) -> Tensor:
+        for id in inter_id:
+            embidx = torch.where(self.global_idx == id)[0]
+            emb = self.emb[embidx]
+            xidx = torch.where(nid == id)[0]
+            x[xidx] = emb
 
     @torch.no_grad()
     def push(self, x: Tensor, inter_id: Tensor):
@@ -59,10 +61,8 @@ class History(torch.nn.Module):
         uncached_idxs = torch.where(~cached_nodes)
         uncached_ids = inter_id[uncached_idxs]
         uncached_embs = x.detach()[uncached_idxs]
-        print("uncached_ids", uncached_ids)
-        print("uncached_embs", uncached_embs)
-        print(self.emb)
-        self.emb[uncached_ids] = uncached_embs
+        indices = torch.where(torch.isin(self.global_idx, uncached_ids))
+        self.emb[indices] = uncached_embs
         self.cached_nodes[uncached_ids] = True
 
     def forward(self, *args, **kwargs):
