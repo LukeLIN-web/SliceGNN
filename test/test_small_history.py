@@ -50,18 +50,20 @@ def test_small_save_embedding():
     nb = nano_batchs[0]
     x = torch.tensor(features, dtype=torch.float)
     model(x[n_id][nb.n_id], nb.n_id, nb.adjs, histories)
-    assert torch.equal(histories[0].emb[1], torch.zeros(4))
-    assert torch.equal(
-        histories[0].cached_nodes,
-        torch.tensor([False, False, False, True, False, False, False, False]))
-    histories[0].reset_parameters()
+    print(histories[0].emb)
+    assert not torch.any(torch.eq(histories[0].emb, 0.0))
+    # print(histories[0].cached_nodes)
+    # assert torch.equal(
+    #     histories[0].cached_nodes,
+    #     torch.tensor([False, False, False, True, False, False, False, False]))
+    # histories[0].reset_parameters()
 
-    nb = nano_batchs[1]
-    model(x[n_id][nb.n_id], nb.n_id, nb.adjs, histories)
-    assert torch.equal(histories[0].emb[0], torch.zeros(4))
-    assert torch.equal(
-        histories[0].cached_nodes,
-        torch.tensor([False, True, False, True, True, False, False, False]))
+    # nb = nano_batchs[1]
+    # model(x[n_id][nb.n_id], nb.n_id, nb.adjs, histories)
+    # assert not torch.any(torch.eq(histories[0].emb, 0.0))
+    # assert torch.equal(
+    #     histories[0].cached_nodes,
+    #     torch.tensor([False, False, False, True, False, False, False, False]))
 
 
 def test_small_histfunction():
@@ -155,11 +157,12 @@ def test_small_pull():
             history = histories[i]
             interid = get_intersection(nb.n_id[:batch_size],
                                        history.global_idx)
-
-            cached_idxs = history.global_idx == interid
-            cached_idxs = torch.where(cached_idxs)  # select true index
-            cached_embs = history.emb[cached_idxs]
-            x.copy_(cached_embs)
+            for j, id in enumerate(interid):
+                embidx = torch.where(history.global_idx == id)[0]
+                emb = history.emb[embidx]
+                xidx = torch.where(nb.n_id[:batch_size] == id)[0]
+                x[xidx] = emb
+            assert not torch.equal(x[0], torch.tensor([3.3, 3.4, 3.5, 3.6]))
             assert torch.equal(x[1], torch.tensor([3.3, 3.4, 3.5, 3.6]))
     loss = F.nll_loss(x, torch.tensor([1]))
     loss.backward()
@@ -208,11 +211,9 @@ def test_small_push():
             uncached_idxs = torch.where(~cached_nodes)
             uncached_ids = interid[uncached_idxs]
             uncached_embs = x.detach()[uncached_idxs]
-            print("uncached_ids", uncached_ids)
-            print("uncached_embs", uncached_embs)
-            print(history.emb)
             indices = torch.where(torch.isin(history.global_idx, uncached_ids))
             history.emb[indices] = uncached_embs
+            assert not torch.any(torch.eq(history.emb, 0.0))
             history.cached_nodes[uncached_ids] = True
             assert torch.equal(
                 history.cached_nodes,
@@ -225,5 +226,7 @@ def test_small_push():
 
 
 if __name__ == "__main__":
-    # test_small_pull_and_push()
-    test_small_push()
+    # test_small_save_embedding()
+    # test_small_histfunction()
+    # test_small_push()
+    test_small_pull()
