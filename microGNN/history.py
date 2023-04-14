@@ -51,10 +51,13 @@ class History(torch.nn.Module):
     def pull(self, x: Tensor, inter_id: Tensor, nid) -> Tensor:
         out = x.clone()
         for id in inter_id:
-            embidx = torch.where(self.global_idx == id)[0]
-            emb = self.emb[embidx]
-            xidx = torch.where(nid == id)[0]
-            out[xidx] = emb
+            if self.cached_nodes[id]:
+                embidx = torch.where(self.global_idx == id)[0]
+                emb = self.emb[embidx]
+                xidx = torch.where(nid == id)[0]
+                out[xidx] = emb
+            else:
+                print("need cache , but not pushed")
         return out
 
     @torch.no_grad()

@@ -59,15 +59,8 @@ def test_same_out(device):
     model2 = SAGE(in_channels, hidden_channels, out_channels,
                   num_layers).to(device)
     model2.load_state_dict(model1.state_dict())
-    for param in model1.parameters():
-        print(param)
-    print('------------------')
-    for param in model2.parameters():
-        print(param)
     out2 = model2(x[n_id][nb.n_id], adjs)
-    print(out1)
-    print(out2)
-    assert torch.allclose(out1, out2)
+    assert torch.equal(out1, out2)
 
     target_node = n_id[:batch_size]
     y = torch.tensor(labels, dtype=torch.long).to(device)
@@ -76,24 +69,23 @@ def test_same_out(device):
     loss1.backward()
     loss2.backward()
 
-    # grad1 = [
-    #     param.grad.clone().view(-1) for param in model1.parameters()
-    #     if param.grad is not None
-    # ]
-    # grad2 = [
-    #     param.grad.clone().view(-1) for param in model2.parameters()
-    #     if param.grad is not None
-    # ]
-    # print(torch.cat(grad1))
-    # print(torch.cat(grad2))
-    # assert torch.equal(torch.cat(grad1), torch.cat(grad2))
+    grad1 = [
+        param.grad.clone().view(-1) for param in model1.parameters()
+        if param.grad is not None
+    ]
+    grad2 = [
+        param.grad.clone().view(-1) for param in model2.parameters()
+        if param.grad is not None
+    ]
 
-    # nb1 = nano_batchs[1]
-    # adjs = [adj.to(device) for adj in nb1.adjs]
-    # nbid = nb1.n_id.to(device)
-    # out1 = model1(x[n_id][nbid], nbid, adjs, histories)
-    # out2 = model2(x[n_id][nb1.n_id], adjs)
-    # assert torch.equal(out1, out2)
+    assert torch.equal(torch.cat(grad1), torch.cat(grad2))
+
+    nb1 = nano_batchs[1]
+    adjs = [adj.to(device) for adj in nb1.adjs]
+    nbid = nb1.n_id.to(device)
+    out1 = model1(x[n_id][nbid], nbid, adjs, histories)
+    out2 = model2(x[n_id][nb1.n_id], adjs)
+    assert torch.equal(out1, out2)
     # loss1 = F.nll_loss(out1, y[target_node][nb1.size])
     # loss2 = F.nll_loss(out2, y[target_node][nb1.size])
     # assert torch.equal(loss1, loss2)
