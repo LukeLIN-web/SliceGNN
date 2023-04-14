@@ -44,7 +44,7 @@ class ScaleSAGE(ScalableGNN):
                 histories: torch.nn.ModuleList) -> Tensor:
         pruned_adjs, pruned_nodes = prune_computation_graph(
             n_id, adjs, histories)
-        for i, (edge_index, prune_id, size) in enumerate(pruned_adjs):
+        for i, (edge_index, _, size) in enumerate(pruned_adjs):
             batch_size = adjs[i].size[1]
             x_target = x[:batch_size]  # nano batch layer nodes
             x = self.convs[i]((x, x_target),
@@ -52,9 +52,9 @@ class ScaleSAGE(ScalableGNN):
             if i != self.num_layers - 1:  # last layer is not saved
                 x = F.relu(x)
                 history: History = histories[i]
-                interid = get_intersection(prune_id, history.global_idx)
+                interid = get_intersection(n_id[:batch_size],
+                                           history.global_idx)
                 x = history.pull(x, interid, pruned_nodes[i])
-                print(x)
                 history.push(x, interid)
                 # x = F.dropout(x, p=0.5, training=self.training)
         return x.log_softmax(dim=-1)

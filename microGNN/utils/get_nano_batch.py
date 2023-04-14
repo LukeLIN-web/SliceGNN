@@ -242,7 +242,7 @@ def get_nano_batch_histories(
     nano_batch_size = batch_size // num_nano_batch
     nano_batchs = []
     num_layers = len(adjs)
-    cached_id = [[] for i in range(num_layers)]
+    cached_id = [[] for i in range(num_layers - 1)]
     cached_nodes = torch.full((num_layers - 1, node_num),
                               False,
                               dtype=torch.bool)
