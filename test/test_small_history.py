@@ -28,6 +28,90 @@ from torch_geometric.testing.decorators import withCUDA
 
 
 @withCUDA
+def test_same_out(device):
+    train_loader = NeighborSampler(
+        edge_index,
+        sizes=hop,
+        batch_size=2,
+        shuffle=False,
+        drop_last=True,
+    )
+    batch_size, n_id, adjs = next(iter(train_loader))
+    nano_batchs, cached_id = get_nano_batch_histories(adjs,
+                                                      mb_n_id,
+                                                      batch_size=2,
+                                                      node_num=node_num,
+                                                      num_nano_batch=2,
+                                                      relabel_nodes=True)
+    histories = torch.nn.ModuleList([
+        History(cacheid, node_num, hidden_channels, device)
+        for cacheid in cached_id
+    ])
+    nb = nano_batchs[0]
+    adjs = [adj.to(device) for adj in nb.adjs]
+    x = torch.tensor(features, dtype=torch.float).to(device)
+
+    model1 = ScaleSAGE(in_channels, hidden_channels, out_channels,
+                       num_layers).to(device)
+    nbid = nb.n_id.to(device)
+    out1 = model1(x[n_id][nbid], nbid, adjs, histories)
+
+    model2 = SAGE(in_channels, hidden_channels, out_channels,
+                  num_layers).to(device)
+    model2.load_state_dict(model1.state_dict())
+    for param in model1.parameters():
+        print(param)
+    print('------------------')
+    for param in model2.parameters():
+        print(param)
+    out2 = model2(x[n_id][nb.n_id], adjs)
+    print(out1)
+    print(out2)
+    assert torch.allclose(out1, out2)
+
+    target_node = n_id[:batch_size]
+    y = torch.tensor(labels, dtype=torch.long).to(device)
+    loss1 = F.nll_loss(out1, y[target_node][nb.size])
+    loss2 = F.nll_loss(out2, y[target_node][nb.size])
+    loss1.backward()
+    loss2.backward()
+
+    # grad1 = [
+    #     param.grad.clone().view(-1) for param in model1.parameters()
+    #     if param.grad is not None
+    # ]
+    # grad2 = [
+    #     param.grad.clone().view(-1) for param in model2.parameters()
+    #     if param.grad is not None
+    # ]
+    # print(torch.cat(grad1))
+    # print(torch.cat(grad2))
+    # assert torch.equal(torch.cat(grad1), torch.cat(grad2))
+
+    # nb1 = nano_batchs[1]
+    # adjs = [adj.to(device) for adj in nb1.adjs]
+    # nbid = nb1.n_id.to(device)
+    # out1 = model1(x[n_id][nbid], nbid, adjs, histories)
+    # out2 = model2(x[n_id][nb1.n_id], adjs)
+    # assert torch.equal(out1, out2)
+    # loss1 = F.nll_loss(out1, y[target_node][nb1.size])
+    # loss2 = F.nll_loss(out2, y[target_node][nb1.size])
+    # assert torch.equal(loss1, loss2)
+    # loss1.backward()
+    # loss2.backward()
+    # grad1 = [
+    #     param.grad.clone().view(-1) for param in model1.parameters()
+    #     if param.grad is not None
+    # ]
+    # grad2 = [
+    #     param.grad.clone().view(-1) for param in model2.parameters()
+    #     if param.grad is not None
+    # ]
+    # # only first hop gradient keeped
+    # assert torch.equal(torch.cat(grad1[-3:]), torch.cat(grad2[-3:]))
+
+
+@withCUDA
 def test_gradient(device):
     train_loader = NeighborSampler(
         edge_index,
@@ -267,4 +351,5 @@ if __name__ == "__main__":
     # test_small_save_embedding()
     # test_small_histfunction()
     # test_small_push()
-    test_small_pull()
+    # test_small_pull()
+    test_same_out('cpu')
