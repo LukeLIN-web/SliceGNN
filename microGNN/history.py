@@ -20,10 +20,12 @@ class History(torch.nn.Module):
         self.embedding_dim = embedding_dim
 
         pin_memory = device is None or str(device) == "cpu"
-        self.global_idx = torch.tensor(cached_id,
-                                       device=device,
-                                       dtype=torch.int64,
-                                       pin_memory=pin_memory)
+        self.global_idx = torch.unique(
+            torch.tensor(cached_id,
+                         device=device,
+                         dtype=torch.int64,
+                         pin_memory=pin_memory))
+
         self.emb = torch.empty(num_cache,
                                embedding_dim,
                                device=device,
@@ -41,6 +43,10 @@ class History(torch.nn.Module):
         self.emb.fill_(0)
         self.cached_nodes.fill_(False)
 
+    def pull_push(self, x: Tensor, inter_id: Tensor):
+        self.pull(x, inter_id)
+        self.push(x, inter_id)
+
     def pull(self, x: Tensor, inter_id: Tensor) -> Tensor:
         cached_idxs = self.global_idx == inter_id
         cached_idxs = torch.where(cached_idxs)  # select true index
@@ -53,6 +59,9 @@ class History(torch.nn.Module):
         uncached_idxs = torch.where(~cached_nodes)
         uncached_ids = inter_id[uncached_idxs]
         uncached_embs = x.detach()[uncached_idxs]
+        print("uncached_ids", uncached_ids)
+        print("uncached_embs", uncached_embs)
+        print(self.emb)
         self.emb[uncached_ids] = uncached_embs
         self.cached_nodes[uncached_ids] = True
 
