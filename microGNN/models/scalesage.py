@@ -8,10 +8,8 @@ from torch_geometric.nn import SAGEConv
 from microGNN import History
 from microGNN.prune import prune_computation_graph
 
-from .base import ScalableGNN
 
-
-class ScaleSAGE(ScalableGNN):
+class ScaleSAGE(torch.nn.Module):
 
     def __init__(self,
                  in_channels: int,
@@ -20,11 +18,10 @@ class ScaleSAGE(ScalableGNN):
                  num_layers: int,
                  pool_size: Optional[int] = None,
                  buffer_size: Optional[int] = None):
-        super().__init__(hidden_channels, num_layers, pool_size, buffer_size)
+        super(ScaleSAGE, self).__init__()
 
         self.in_channels = in_channels
         self.out_channels = out_channels
-
         self.num_layers = num_layers
 
         self.convs = torch.nn.ModuleList()
