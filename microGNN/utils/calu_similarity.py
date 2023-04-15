@@ -24,7 +24,6 @@ def get_intersection(nid1: Tensor, nid2: Tensor) -> Tensor:
     """
     calu the common nodes number of two nano batch
     """
-    assert nid2.numel() > 0
     a_cat_b, counts = torch.cat([nid1, nid2]).unique(return_counts=True)
     intersection = a_cat_b[torch.where(counts.gt(1))]
     return intersection

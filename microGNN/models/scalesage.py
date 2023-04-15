@@ -47,21 +47,14 @@ class ScaleSAGE(ScalableGNN):
         for i, adj in enumerate(pruned_adjs):
             batch_size = adjs[i].size[1]  # original batch size
             x_target = x[:batch_size]  # nano batch layer nodes
-            print(x)
-            print(adj.edge_index)
-            print(x_target)
             x = self.convs[i]((x, x_target),
                               adj.edge_index)  # non cached nodes embedding
-            print(x)
             if i != self.num_layers - 1:  # last layer is not saved
                 x = F.relu(x)
                 history: History = histories[i]
                 interid = get_intersection(n_id[:batch_size],
                                            history.global_idx)
-                print(n_id[:batch_size])
-                print(x)
                 x = history.pull(x, interid, pruned_nodes[i + 1])
-                print(x)
                 history.push(x, interid, pruned_nodes[i + 1])
                 # x = F.dropout(x, p=0.5, training=self.training)
         return x.log_softmax(dim=-1)

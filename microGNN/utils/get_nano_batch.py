@@ -215,7 +215,6 @@ def get_nano_batch_histories(
     adjs: List[Adj],
     n_id: Tensor,
     batch_size: int,
-    node_num: int,
     num_nano_batch: int = 2,
     relabel_nodes: bool = True,
 ):
@@ -243,7 +242,7 @@ def get_nano_batch_histories(
     nano_batchs = []
     num_layers = len(adjs)
     cached_id = [[] for i in range(num_layers - 1)]
-    cached_nodes = torch.full((num_layers - 1, node_num),
+    cached_nodes = torch.full((num_layers - 1, len(n_id)),
                               False,
                               dtype=torch.bool)
     for i in range(num_nano_batch):

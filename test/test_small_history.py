@@ -40,7 +40,6 @@ def test_same_out(device):
     nano_batchs, cached_id = get_nano_batch_histories(adjs,
                                                       mb_n_id,
                                                       batch_size=2,
-                                                      node_num=node_num,
                                                       num_nano_batch=2,
                                                       relabel_nodes=True)
     histories = torch.nn.ModuleList([
@@ -115,7 +114,6 @@ def test_gradient(device):
     nano_batchs, cached_id = get_nano_batch_histories(adjs,
                                                       mb_n_id,
                                                       batch_size=2,
-                                                      node_num=node_num,
                                                       num_nano_batch=2,
                                                       relabel_nodes=True)
     histories = torch.nn.ModuleList([
@@ -152,7 +150,6 @@ def test_small_save_embedding():
     nano_batchs, cached_id = get_nano_batch_histories(adjs,
                                                       mb_n_id,
                                                       batch_size=2,
-                                                      node_num=node_num,
                                                       num_nano_batch=2,
                                                       relabel_nodes=True)
 
@@ -193,7 +190,6 @@ def test_small_histfunction():
     nano_batchs, cached_id = get_nano_batch_histories(adjs,
                                                       mb_n_id,
                                                       batch_size=2,
-                                                      node_num=node_num,
                                                       num_nano_batch=2,
                                                       relabel_nodes=True)
     histories = torch.nn.ModuleList([
@@ -246,7 +242,6 @@ def test_small_pull():
     nano_batchs, cached_id = get_nano_batch_histories(adjs,
                                                       mb_n_id,
                                                       batch_size=2,
-                                                      node_num=node_num,
                                                       num_nano_batch=2,
                                                       relabel_nodes=True)
     histories = torch.nn.ModuleList([
@@ -307,7 +302,6 @@ def test_small_push():
     nano_batchs, cached_id = get_nano_batch_histories(adjs,
                                                       mb_n_id,
                                                       batch_size=2,
-                                                      node_num=node_num,
                                                       num_nano_batch=2,
                                                       relabel_nodes=True)
     histories = torch.nn.ModuleList([
@@ -366,7 +360,6 @@ def test_init_history():
     nano_batchs, cached_id = get_nano_batch_histories(adjs,
                                                       mb_n_id,
                                                       batch_size=2,
-                                                      node_num=node_num,
                                                       num_nano_batch=2,
                                                       relabel_nodes=True)
     histories = torch.nn.ModuleList([

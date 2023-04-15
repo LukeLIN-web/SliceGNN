@@ -9,7 +9,8 @@ from torch_geometric.testing.decorators import onlyCUDA, withCUDA
 import quiver
 from microGNN import History
 from microGNN.models import ScaleSAGE
-from microGNN.utils import get_dataset, get_nano_batch
+from microGNN.utils import (get_dataset, get_nano_batch,
+                            get_nano_batch_histories)
 
 
 @onlyCUDA
@@ -34,7 +35,7 @@ def test_acc():
         shuffle=False,
         num_workers=6,
     )
-    device = torch.device("cuda:0")
+    device = torch.device("cuda:1")
     torch.manual_seed(12345)
     num_layers = 2
     hidden_channels = 256
@@ -51,10 +52,12 @@ def test_acc():
         for seeds in train_loader:
             n_id, batch_size, adjs = quiver_sampler.sample(seeds)
             target_node = n_id[:batch_size]
-            nano_batchs = get_nano_batch(adjs, n_id, batch_size, 2)
+            nano_batchs, cached_id = get_nano_batch_histories(
+                adjs, n_id, batch_size=2, num_nano_batch=2, relabel_nodes=True)
+            print("cached_id", cached_id)
             histories = torch.nn.ModuleList([
-                History(len(n_id), hidden_channels, device)
-                for _ in range(num_layers - 1)
+                History(cacheid, len(n_id), hidden_channels, device)
+                for cacheid in cached_id
             ])
             for i, nb in enumerate(nano_batchs):
                 adjs = [adj.to(device) for adj in nb.adjs]
@@ -112,10 +115,11 @@ def test_real_dataset(device):
         model.train()
         for batch_size, n_id, adjs in train_loader:
             target_node = n_id[:batch_size]
-            nano_batchs = get_nano_batch(adjs, n_id, batch_size, 2)
+            nano_batchs, cached_id = get_nano_batch_histories(
+                adjs, n_id, batch_size=2, num_nano_batch=2, relabel_nodes=True)
             histories = torch.nn.ModuleList([
-                History(len(n_id), hidden_channels, device)
-                for _ in range(num_layers - 1)
+                History(cacheid, len(n_id), hidden_channels, device)
+                for cacheid in cached_id
             ])
             for i, nb in enumerate(nano_batchs):
                 adjs = [adj.to(device) for adj in nb.adjs]
@@ -134,9 +138,9 @@ def test_real_dataset(device):
     acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
     acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
     acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
+    print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
 
 
 if __name__ == "__main__":
-    # test_real_dataset("cpu")
-    # test_real_dataset("cuda:0")
     test_acc()
+    # test_real_dataset('cuda:0')
