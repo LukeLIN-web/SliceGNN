@@ -39,6 +39,7 @@ def test_prune_computatition_graph():
                                                       histories)
     assert pruned_adjs[0].edge_index.tolist() == [[1, 2, 3], [0, 0, 1]]
     assert pruned_adjs[1].edge_index.tolist() == [[1, 2], [0, 0]]
+    assert len(layernodes) == 2
     assert layernodes[0].tolist() == [0, 2, 3, 5]
     assert layernodes[1].tolist() == [0, 2, 3]
 
@@ -47,5 +48,6 @@ def test_prune_computatition_graph():
                                                       histories)
     assert pruned_adjs[0].edge_index.tolist() == [[1, 2, 4], [0, 0, 2]]
     assert pruned_adjs[1].edge_index.tolist() == [[1, 2], [0, 0]]
+    assert len(layernodes) == 2
     assert layernodes[0].tolist() == [1, 4, 3, 7]
     assert layernodes[1].tolist() == [1, 3, 4]
