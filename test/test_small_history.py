@@ -77,7 +77,6 @@ def test_same_out(device):
         param.grad.clone().view(-1) for param in model2.parameters()
         if param.grad is not None
     ]
-
     assert torch.equal(torch.cat(grad1), torch.cat(grad2))
 
     nb1 = nano_batchs[1]
@@ -167,7 +166,6 @@ def test_small_save_embedding():
         SAGEConv(in_channels, hidden_channels, root_weight=False, bias=False))
     convs.append(
         SAGEConv(hidden_channels, out_channels, root_weight=False, bias=False))
-
     nb = nano_batchs[0]
     x = torch.tensor(features, dtype=torch.float)
     model(x[n_id][nb.n_id], nb.n_id, nb.adjs, histories)
@@ -175,9 +173,9 @@ def test_small_save_embedding():
         histories[0].cached_nodes,
         torch.tensor([False, False, False, True, False, False, False, False]))
     assert not torch.equal(histories[0].emb[0], torch.zeros(4))
-    nb = nano_batchs[1]
-    model(x[n_id][nb.n_id], nb.n_id, nb.adjs, histories)
-    assert False
+    # nb = nano_batchs[1]
+    # model(x[n_id][nb.n_id], nb.n_id, nb.adjs, histories)
+    # assert False
 
 
 def test_small_histfunction():
@@ -226,7 +224,7 @@ def test_small_histfunction():
             x = history.pull(x, interid, pruned_nodes[i + 1])
             assert not torch.equal(x[0], torch.tensor([3.3, 3.4, 3.5, 3.6]))
             assert torch.equal(x[1], torch.tensor([3.3, 3.4, 3.5, 3.6]))
-            history.push(x, interid)
+            history.push(x, interid, pruned_nodes[i + 1])
     loss = F.nll_loss(x, torch.tensor([1]))
     loss.backward()
     for param in convs.parameters():

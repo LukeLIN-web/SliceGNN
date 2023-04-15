@@ -61,14 +61,15 @@ class History(torch.nn.Module):
         return out
 
     @torch.no_grad()
-    def push(self, x: Tensor, inter_id: Tensor):
-        cached_nodes = self.cached_nodes[inter_id]
-        uncached_idxs = torch.where(~cached_nodes)
-        uncached_ids = inter_id[uncached_idxs]
-        uncached_embs = x.detach()[uncached_idxs]
-        indices = torch.where(torch.isin(self.global_idx, uncached_ids))
-        self.emb[indices] = uncached_embs
-        self.cached_nodes[uncached_ids] = True
+    def push(self, x: Tensor, inter_id: Tensor, layer_id: Tensor) -> Tensor:
+        for id in inter_id:
+            if self.cached_nodes[id]:
+                print("need pull , but not pushed")
+            else:
+                embidx = torch.where(self.global_idx == id)[0]
+                xidx = torch.where(layer_id == id)[0]
+                self.emb[embidx] = x[xidx]
+                self.cached_nodes[id] = True
 
     def forward(self, *args, **kwargs):
         """"""
