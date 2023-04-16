@@ -8,7 +8,7 @@ from torch_geometric.testing.decorators import onlyCUDA, withCUDA
 
 import quiver
 from microGNN import History
-from microGNN.models import ScaleSAGE
+from microGNN.models import SAGE, ScaleSAGE
 from microGNN.utils import (get_dataset, get_nano_batch,
                             get_nano_batch_histories)
 
@@ -27,14 +27,6 @@ def test_acc():
                                                batch_size=1024,
                                                shuffle=False,
                                                drop_last=True)
-    # subgraph_loader = NeighborSampler(
-    #     data.edge_index,
-    #     node_idx=None,
-    #     sizes=[-1],
-    #     batch_size=2048,
-    #     shuffle=False,
-    #     num_workers=6,
-    # )
     device = torch.device("cuda:1")
     torch.manual_seed(12345)
     num_layers = 2
@@ -53,7 +45,7 @@ def test_acc():
             n_id, batch_size, adjs = quiver_sampler.sample(seeds)
             target_node = n_id[:batch_size]
             nano_batchs, cached_id = get_nano_batch_histories(
-                adjs, n_id, batch_size=2, num_nano_batch=2, relabel_nodes=True)
+                adjs, n_id, batch_size)
             histories = torch.nn.ModuleList([
                 History(cacheid, len(n_id), hidden_channels, device)
                 for cacheid in cached_id

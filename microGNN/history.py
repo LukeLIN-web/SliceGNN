@@ -52,22 +52,24 @@ class History(torch.nn.Module):
         out = x.clone()
         for id in inter_id:
             if self.cached_nodes[id]:
-                print("pulling")
+                # print("pulling")
                 embidx = torch.where(self.global_idx == id)[0]
                 emb = self.emb[embidx]
                 xidx = torch.where(layer_id == id)[0]
                 out[xidx] = emb
             else:
-                print("need cache , but not pushed")
+                # print("need cache , but not pushed")
+                pass
         return out
 
     @torch.no_grad()
     def push(self, x: Tensor, inter_id: Tensor, layer_id: Tensor) -> Tensor:
         for id in inter_id:
             if self.cached_nodes[id]:
-                print("have pushed")
+                # print("have pushed")
+                pass
             else:
-                print("pushing")
+                # print("pushing")
                 embidx = torch.where(self.global_idx == id)[0]
                 xidx = torch.where(layer_id == id)[0]
                 self.emb[embidx] = x[xidx]
