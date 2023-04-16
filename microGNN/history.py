@@ -49,12 +49,17 @@ class History(torch.nn.Module):
         self.push(x, inter_id)
 
     def pull(self, x: Tensor, inter_id: Tensor, layer_id: Tensor) -> Tensor:
-        mask = (self.cached_nodes[inter_id] == True)
-        embidx = torch.where(self.global_idx == inter_id.unsqueeze(-1))[1]
-        emb = self.emb[embidx[mask]]
-        xidx = torch.where(layer_id.unsqueeze(-1) == inter_id.unsqueeze(0))[0]
         out = x.clone()
-        out[xidx[mask]] = emb
+        for id in inter_id:
+            if self.cached_nodes[id]:
+                # print("pulling")
+                embidx = torch.where(self.global_idx == id)[0]
+                emb = self.emb[embidx]
+                xidx = torch.where(layer_id == id)[0]
+                out[xidx] = emb
+            else:
+                # print("need cache , but not pushed")
+                pass
         return out
 
     @torch.no_grad()

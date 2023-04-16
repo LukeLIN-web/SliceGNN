@@ -12,7 +12,7 @@ params:
   ogbn-products:
     num_layers: 3
     hop: [10, 10,10]
-    batch_size: 10240
+    batch_size: 1024
 
   papers100M:
     num_layers: 3
