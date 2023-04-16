@@ -49,31 +49,43 @@ class History(torch.nn.Module):
         self.push(x, inter_id)
 
     def pull(self, x: Tensor, inter_id: Tensor, layer_id: Tensor) -> Tensor:
+        # out = x.clone()
+        # for id in inter_id:
+        #     if self.cached_nodes[id]:
+        #         # print("pulling")
+        #         embidx = torch.where(self.global_idx == id)[0]
+        #         emb = self.emb[embidx]
+        #         xidx = torch.where(layer_id == id)[0]
+        #         out[xidx] = emb
+        #     else:
+        #         # print("need cache , but not pushed")
+        #         pass
+        # return out
+        mask = (self.cached_nodes[inter_id] == True)
+        embidx = torch.where(self.global_idx == inter_id.unsqueeze(-1))[1]
+        emb = self.emb[embidx[mask]]
+        xidx = torch.where(layer_id.unsqueeze(-1) == inter_id.unsqueeze(0))[0]
         out = x.clone()
-        for id in inter_id:
-            if self.cached_nodes[id]:
-                # print("pulling")
-                embidx = torch.where(self.global_idx == id)[0]
-                emb = self.emb[embidx]
-                xidx = torch.where(layer_id == id)[0]
-                out[xidx] = emb
-            else:
-                # print("need cache , but not pushed")
-                pass
+        out[xidx[mask]] = emb
         return out
 
     @torch.no_grad()
     def push(self, x: Tensor, inter_id: Tensor, layer_id: Tensor) -> Tensor:
-        for id in inter_id:
-            if self.cached_nodes[id]:
-                # print("have pushed")
-                pass
-            else:
-                # print("pushing")
-                embidx = torch.where(self.global_idx == id)[0]
-                xidx = torch.where(layer_id == id)[0]
-                self.emb[embidx] = x[xidx]
-                self.cached_nodes[id] = True
+        # for id in inter_id:
+        #     if self.cached_nodes[id]:
+        #         # print("have pushed")
+        #         pass
+        #     else:
+        #         # print("pushing")
+        #         embidx = torch.where(self.global_idx == id)[0]
+        #         xidx = torch.where(layer_id == id)[0]
+        #         self.emb[embidx] = x[xidx]
+        #         self.cached_nodes[id] = True
+        mask = (self.cached_nodes[inter_id] == False)
+        embidx = torch.where(self.global_idx == inter_id.unsqueeze(-1))[1]
+        xidx = torch.where(layer_id.unsqueeze(-1) == inter_id.unsqueeze(0))[0]
+        self.emb[embidx[mask]] = x[xidx[mask]]
+        self.cached_nodes[inter_id[mask]] = True
 
     def forward(self, *args, **kwargs):
         """"""

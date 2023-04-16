@@ -256,11 +256,9 @@ def get_nano_batch_histories(
                 relabel_nodes=True,
             )
             if j != num_layers - 1:
-                for id in sub_nid:
-                    if cached_nodes[j][id] == False:
-                        cached_nodes[j][id] = True
-                    elif cached_nodes[j][id] == True:
-                        cached_id[j].append(id)
+                mask = (cached_nodes[j][sub_nid] == False)
+                cached_nodes[j][sub_nid[mask]] = True
+                cached_id[j].extend(sub_nid[mask].tolist())
             subadjs.append(Adj(sub_adjs, None, (len(sub_nid), target_size)))
         subadjs.reverse()  # O(n) 大的在前面
         nano_batchs.append(Nanobatch(sub_nid, nano_batch_size, subadjs))
