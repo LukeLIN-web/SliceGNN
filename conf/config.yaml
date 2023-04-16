@@ -1,13 +1,13 @@
 hidden_channels: 256
 dropout: 0.5
 lr: 0.01
-num_epoch: 5
+num_epoch: 1
 nano_pergpu: 2
 num_train_worker: 1
 num_sample_worker: 1
 
 defaults:
-  - dataset: papers100M
+  - dataset: yelp
   - model: sage
 
 root: "/data/ogb"

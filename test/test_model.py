@@ -14,6 +14,51 @@ from microGNN.utils import (get_dataset, get_nano_batch,
 
 
 @onlyCUDA
+def test_originacc():
+    dataset = get_dataset("reddit", "/data/")
+    data = dataset[0]
+    csr_topo = quiver.CSRTopo(data.edge_index)
+    quiver_sampler = quiver.pyg.GraphSageSampler(csr_topo,
+                                                 sizes=[10, 5],
+                                                 device=1,
+                                                 mode="GPU")
+    train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
+    train_loader = torch.utils.data.DataLoader(train_idx,
+                                               batch_size=1024,
+                                               shuffle=False,
+                                               drop_last=True)
+    device = torch.device("cuda:1")
+    torch.manual_seed(12345)
+    num_layers = 2
+    hidden_channels = 256
+    model = SAGE(in_channels=data.num_features,
+                 hidden_channels=hidden_channels,
+                 out_channels=dataset.num_classes,
+                 num_layers=num_layers).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    x, y = data.x.to(device), data.y.to(device)
+    print("Start training...")
+    for epoch in range(1):
+        model.train()
+        epoch_start = default_timer()
+        for seeds in train_loader:
+            n_id, batch_size, adjs = quiver_sampler.sample(seeds)
+            target_node = n_id[:batch_size]
+            nano_batchs = get_nano_batch(adjs, n_id, batch_size)
+            for i, nb in enumerate(nano_batchs):
+                nano_batch_adjs = [adj.to(device) for adj in nb.adjs]
+                out = model(x[n_id][nb.n_id], nano_batch_adjs)
+                loss = F.nll_loss(
+                    out, y[target_node][i * (nb.size):(i + 1) * (nb.size)])
+                loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
+        print(
+            f"Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {default_timer() - epoch_start}"
+        )
+
+
+@onlyCUDA
 def test_acc():
     dataset = get_dataset("reddit", "/data/")
     data = dataset[0]
@@ -123,5 +168,6 @@ def test_real_dataset(device):
 
 
 if __name__ == "__main__":
-    test_acc()
+    # test_acc()
+    test_originacc()
     # test_real_dataset('cuda:0')
