@@ -107,6 +107,12 @@ def train(conf):
         print(f"Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {epochtime}")
     maxgpu = torch.cuda.max_memory_allocated() / 10**9
     print("train finished")
+    metric = cal_metrics(epochtimes)
+    log.log(
+        logging.INFO,
+        f',scalesage,{dataset_name},{gpu_num * per_gpu},{layers},{metric["mean"]:.2f}, {maxgpu:.2f}',
+    )
+
     # if dataset_name == "ogbn-products":
     #     evaluator = Evaluator(name=dataset_name)
     #     model.eval()

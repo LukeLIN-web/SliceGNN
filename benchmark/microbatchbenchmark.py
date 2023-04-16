@@ -101,41 +101,47 @@ def train(conf):
         print(f"Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {epochtime}")
     maxgpu = torch.cuda.max_memory_allocated() / 10**9
     print("train finished")
-    if dataset_name == "ogbn-products" or dataset_name == "papers100M":
-        evaluator = Evaluator(name=dataset_name)
-        model.eval()
-        out = model.inference(x, rank, subgraph_loader)
-
-        y_true = y.cpu()
-        y_pred = out.argmax(dim=-1, keepdim=True)
-
-        acc1 = evaluator.eval({
-            'y_true': y_true[split_idx['train']],
-            'y_pred': y_pred[split_idx['train']],
-        })['acc']
-        acc2 = evaluator.eval({
-            'y_true': y_true[split_idx['valid']],
-            'y_pred': y_pred[split_idx['valid']],
-        })['acc']
-        acc3 = evaluator.eval({
-            'y_true': y_true[split_idx['test']],
-            'y_pred': y_pred[split_idx['test']],
-        })['acc']
-    else:
-        model.eval()
-        with torch.no_grad():
-            out = model.inference(x, rank, subgraph_loader)
-        res = out.argmax(dim=-1) == y  #  big graph may oom
-        acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
-        assert acc1 > 0.90, "Sanity check , Low training accuracy."
-        acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
-        acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
-        print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
     metric = cal_metrics(epochtimes)
     log.log(
         logging.INFO,
-        f',origin,{dataset_name},{gpu_num * per_gpu},{layers},{metric["mean"]:.2f}, {maxgpu:.2f}, {acc3:.4f}',
+        f',scalesage,{dataset_name},{gpu_num * per_gpu},{layers},{metric["mean"]:.2f}, {maxgpu:.2f}',
     )
+
+    # if dataset_name == "ogbn-products" or dataset_name == "papers100M":
+    #     evaluator = Evaluator(name=dataset_name)
+    #     model.eval()
+    #     out = model.inference(x, rank, subgraph_loader)
+
+    #     y_true = y.cpu()
+    #     y_pred = out.argmax(dim=-1, keepdim=True)
+
+    #     acc1 = evaluator.eval({
+    #         'y_true': y_true[split_idx['train']],
+    #         'y_pred': y_pred[split_idx['train']],
+    #     })['acc']
+    #     acc2 = evaluator.eval({
+    #         'y_true': y_true[split_idx['valid']],
+    #         'y_pred': y_pred[split_idx['valid']],
+    #     })['acc']
+    #     acc3 = evaluator.eval({
+    #         'y_true': y_true[split_idx['test']],
+    #         'y_pred': y_pred[split_idx['test']],
+    #     })['acc']
+    # else:
+    #     model.eval()
+    #     with torch.no_grad():
+    #         out = model.inference(x, rank, subgraph_loader)
+    #     res = out.argmax(dim=-1) == y  #  big graph may oom
+    #     acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
+    #     assert acc1 > 0.90, "Sanity check , Low training accuracy."
+    #     acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
+    #     acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
+    #     print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
+    # metric = cal_metrics(epochtimes)
+    # log.log(
+    #     logging.INFO,
+    #     f',origin,{dataset_name},{gpu_num * per_gpu},{layers},{metric["mean"]:.2f}, {maxgpu:.2f}, {acc3:.4f}',
+    # )
 
 
 if __name__ == "__main__":

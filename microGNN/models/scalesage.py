@@ -7,7 +7,7 @@ from torch_geometric.nn import SAGEConv
 
 from microGNN import History
 from microGNN.prune import prune_computation_graph
-from microGNN.utils import get_intersection, get_nano_batch_histories
+from microGNN.utils import get_intersection
 
 from .base import ScalableGNN
 

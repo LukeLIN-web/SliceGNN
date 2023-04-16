@@ -20,11 +20,10 @@ class History(torch.nn.Module):
         self.embedding_dim = embedding_dim
 
         pin_memory = device is None or str(device) == "cpu"
-        self.global_idx = torch.unique(
-            torch.tensor(cached_id,
-                         device=device,
-                         dtype=torch.int64,
-                         pin_memory=pin_memory))
+        self.global_idx = torch.tensor(cached_id,
+                                       device=device,
+                                       dtype=torch.int64,
+                                       pin_memory=pin_memory)
 
         self.emb = torch.empty(num_cache,
                                embedding_dim,

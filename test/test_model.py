@@ -19,7 +19,7 @@ def test_acc():
     data = dataset[0]
     csr_topo = quiver.CSRTopo(data.edge_index)
     quiver_sampler = quiver.pyg.GraphSageSampler(csr_topo,
-                                                 sizes=[10, 5],
+                                                 sizes=[10, 5, 5],
                                                  device=1,
                                                  mode="GPU")
     train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
@@ -29,7 +29,7 @@ def test_acc():
                                                drop_last=True)
     device = torch.device("cuda:1")
     torch.manual_seed(12345)
-    num_layers = 2
+    num_layers = 3
     hidden_channels = 256
     model = ScaleSAGE(in_channels=data.num_features,
                       hidden_channels=hidden_channels,
