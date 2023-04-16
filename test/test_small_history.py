@@ -68,14 +68,8 @@ def test_same_out(device):
     loss1.backward()
     loss2.backward()
 
-    grad1 = [
-        param.grad.clone().view(-1) for param in model1.parameters()
-        if param.grad is not None
-    ]
-    grad2 = [
-        param.grad.clone().view(-1) for param in model2.parameters()
-        if param.grad is not None
-    ]
+    grad1 = [param.grad.clone().view(-1) for param in model1.parameters()]
+    grad2 = [param.grad.clone().view(-1) for param in model2.parameters()]
     assert torch.equal(torch.cat(grad1), torch.cat(grad2))
 
     nb1 = nano_batchs[1]
@@ -89,14 +83,8 @@ def test_same_out(device):
     assert torch.equal(loss1, loss2)
     loss1.backward()
     loss2.backward()
-    grad1 = [
-        param.grad.clone().view(-1) for param in model1.parameters()
-        if param.grad is not None
-    ]
-    grad2 = [
-        param.grad.clone().view(-1) for param in model2.parameters()
-        if param.grad is not None
-    ]
+    grad1 = [param.grad.clone().view(-1) for param in model1.parameters()]
+    grad2 = [param.grad.clone().view(-1) for param in model2.parameters()]
     # only first hop gradient keeped
     assert torch.equal(torch.cat(grad1[-3:]), torch.cat(grad2[-3:]))
 
@@ -377,5 +365,5 @@ if __name__ == "__main__":
     # test_small_save_embedding()
     # test_small_histfunction()
     # test_small_push()
-    test_small_pull()
-    # test_same_out('cpu')
+    # test_small_pull()
+    test_same_out('cpu')

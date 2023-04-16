@@ -52,6 +52,7 @@ class History(torch.nn.Module):
         out = x.clone()
         for id in inter_id:
             if self.cached_nodes[id]:
+                print("pulling")
                 embidx = torch.where(self.global_idx == id)[0]
                 emb = self.emb[embidx]
                 xidx = torch.where(layer_id == id)[0]
@@ -64,8 +65,9 @@ class History(torch.nn.Module):
     def push(self, x: Tensor, inter_id: Tensor, layer_id: Tensor) -> Tensor:
         for id in inter_id:
             if self.cached_nodes[id]:
-                print("need pull , but not pushed")
+                print("have pushed")
             else:
+                print("pushing")
                 embidx = torch.where(self.global_idx == id)[0]
                 xidx = torch.where(layer_id == id)[0]
                 self.emb[embidx] = x[xidx]

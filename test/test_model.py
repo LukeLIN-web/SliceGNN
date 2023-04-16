@@ -43,10 +43,6 @@ def test_acc():
                       hidden_channels=hidden_channels,
                       out_channels=dataset.num_classes,
                       num_layers=num_layers).to(device)
-    # model = SAGE(in_channels=data.num_features,
-    #              hidden_channels=hidden_channels,
-    #              out_channels=dataset.num_classes,
-    #              num_layers=num_layers).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
     x, y = data.x.to(device), data.y.to(device)
     print("Start training...")
