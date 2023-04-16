@@ -216,7 +216,7 @@ def get_nano_batch_histories(
     n_id: Tensor,
     batch_size: int,
     num_nano_batch: int = 2,
-    relabel_nodes: bool = True,
+    relabel_nodes: Optional[bool] = True,
 ):
     r"""Create a list of `num_nano_batch` nanobatches
     from a list of adjacency matrices `adjs`.

@@ -17,7 +17,7 @@ hidden_channels = 4
 out_channels = 2
 node_num = 8
 features = [[i for j in range(in_channels)] for i in range(node_num)]
-labels = [[i % 2] for i in range(node_num)]
+labels = [i % 2 for i in range(node_num)]
 # yapf: disable
 edge_index = torch.tensor([[2, 3, 3, 4, 5, 6, 7],
                             [0, 0, 1, 1, 2, 3, 4]], dtype=torch.long) # noqa
@@ -43,7 +43,7 @@ def test_same_out(device):
                                                       num_nano_batch=2,
                                                       relabel_nodes=True)
     histories = torch.nn.ModuleList([
-        History(cacheid, node_num, hidden_channels, device)
+        History(cacheid, len(n_id), hidden_channels, device)
         for cacheid in cached_id
     ])
     nb = nano_batchs[0]
@@ -52,8 +52,8 @@ def test_same_out(device):
 
     model1 = ScaleSAGE(in_channels, hidden_channels, out_channels,
                        num_layers).to(device)
-    nbid = nb.n_id.to(device)
-    out1 = model1(x[n_id][nbid], nbid, adjs, histories)
+    nb1id = nb.n_id.to(device)
+    out1 = model1(x[n_id][nb1id], nb1id, adjs, histories)
 
     model2 = SAGE(in_channels, hidden_channels, out_channels,
                   num_layers).to(device)
@@ -63,8 +63,8 @@ def test_same_out(device):
 
     target_node = n_id[:batch_size]
     y = torch.tensor(labels, dtype=torch.long).to(device)
-    loss1 = F.nll_loss(out1, y[target_node][nb.size])
-    loss2 = F.nll_loss(out2, y[target_node][nb.size])
+    loss1 = F.nll_loss(out1, y[target_node][:nb.size])
+    loss2 = F.nll_loss(out2, y[target_node][:nb.size])
     loss1.backward()
     loss2.backward()
 
@@ -80,12 +80,12 @@ def test_same_out(device):
 
     nb1 = nano_batchs[1]
     adjs = [adj.to(device) for adj in nb1.adjs]
-    nbid = nb1.n_id.to(device)
-    out1 = model1(x[n_id][nbid], nbid, adjs, histories)
+    nb1id = nb1.n_id.to(device)
+    out1 = model1(x[n_id][nb1id], nb1id, adjs, histories)
     out2 = model2(x[n_id][nb1.n_id], adjs)
     assert torch.equal(out1, out2)
-    loss1 = F.nll_loss(out1, y[target_node][nb1.size])
-    loss2 = F.nll_loss(out2, y[target_node][nb1.size])
+    loss1 = F.nll_loss(out1, y[target_node][nb1.size:2 * nb1.size])
+    loss2 = F.nll_loss(out2, y[target_node][nb1.size:2 * nb1.size])
     assert torch.equal(loss1, loss2)
     loss1.backward()
     loss2.backward()
@@ -130,7 +130,7 @@ def test_gradient(device):
     out1 = model1(x[n_id][nbid], nbid, adjs, histories)
     target_node = n_id[:batch_size]
     y = torch.tensor(labels, dtype=torch.long).to(device)
-    loss1 = F.nll_loss(out1, y[target_node][nb.size])
+    loss1 = F.nll_loss(out1, y[target_node][:nb.size])
     loss1.backward()
     for param in model1.parameters():
         assert param.grad is not None

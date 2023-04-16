@@ -20,21 +20,21 @@ def test_acc():
     csr_topo = quiver.CSRTopo(data.edge_index)
     quiver_sampler = quiver.pyg.GraphSageSampler(csr_topo,
                                                  sizes=[10, 5],
-                                                 device=0,
+                                                 device=1,
                                                  mode="GPU")
     train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
     train_loader = torch.utils.data.DataLoader(train_idx,
                                                batch_size=1024,
                                                shuffle=False,
                                                drop_last=True)
-    subgraph_loader = NeighborSampler(
-        data.edge_index,
-        node_idx=None,
-        sizes=[-1],
-        batch_size=2048,
-        shuffle=False,
-        num_workers=6,
-    )
+    # subgraph_loader = NeighborSampler(
+    #     data.edge_index,
+    #     node_idx=None,
+    #     sizes=[-1],
+    #     batch_size=2048,
+    #     shuffle=False,
+    #     num_workers=6,
+    # )
     device = torch.device("cuda:1")
     torch.manual_seed(12345)
     num_layers = 2
@@ -43,6 +43,10 @@ def test_acc():
                       hidden_channels=hidden_channels,
                       out_channels=dataset.num_classes,
                       num_layers=num_layers).to(device)
+    # model = SAGE(in_channels=data.num_features,
+    #              hidden_channels=hidden_channels,
+    #              out_channels=dataset.num_classes,
+    #              num_layers=num_layers).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
     x, y = data.x.to(device), data.y.to(device)
     print("Start training...")
@@ -54,7 +58,6 @@ def test_acc():
             target_node = n_id[:batch_size]
             nano_batchs, cached_id = get_nano_batch_histories(
                 adjs, n_id, batch_size=2, num_nano_batch=2, relabel_nodes=True)
-            print("cached_id", cached_id)
             histories = torch.nn.ModuleList([
                 History(cacheid, len(n_id), hidden_channels, device)
                 for cacheid in cached_id
@@ -71,16 +74,6 @@ def test_acc():
         print(
             f"Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {default_timer() - epoch_start}"
         )
-
-    model.eval()
-    with torch.no_grad():
-        out = model.inference(x, device, subgraph_loader)
-    res = out.argmax(dim=-1) == y
-    acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
-    # assert acc1 > 0.94, "Sanity check , Low training accuracy."
-    acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
-    acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
-    print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
 
 
 @withCUDA
