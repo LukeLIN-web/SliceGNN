@@ -158,9 +158,6 @@ def test_small_save_embedding():
         histories[0].cached_nodes,
         torch.tensor([False, False, False, True, False, False, False, False]))
     assert not torch.equal(histories[0].emb[0], torch.zeros(4))
-    # nb = nano_batchs[1]
-    # model(x[n_id][nb.n_id], nb.n_id, nb.adjs, histories)
-    # assert False
 
 
 def test_small_histfunction():
