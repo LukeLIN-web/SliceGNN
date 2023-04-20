@@ -145,7 +145,7 @@ def test_small_save_embedding():
         History(cacheid, node_num, hidden_channels, 'cpu')
         for cacheid in cached_id
     ])
-    assert torch.equal(histories[0].need_cache_nodes,
+    assert torch.equal(histories[0].emb_idx,
                        torch.tensor([-1, -1, -1, 0, -1, -1, -1, -1]))
 
     convs = torch.nn.ModuleList()
@@ -251,23 +251,14 @@ def test_small_pull():
                      adj.edge_index)  # compute the non cached nodes embedding
         if i != num_layers - 1:  # last layer is not saved
             history = histories[i]
-            # out = x.clone()
-            # assert torch.equal(out[1], torch.zeros(4))
-            # for i, id in enumerate(pruned_nodes[i + 1]):
-            #     if history.cached_nodes[
-            #             id] and history.need_cache_nodes[id] != -1:
-            #         embidx = history.need_cache_nodes[id]
-            #         assert embidx == 0
-            #         emb = history.emb[embidx]
-            #         assert i == 1
-            #         out[i] = emb
-            is_cached = history.cached_nodes[pruned_nodes[i + 1]]
-            assert torch.equal(is_cached, torch.tensor([False, True, False]))
-            cache_indices = history.need_cache_nodes[pruned_nodes[i + 1]
-                                                     [is_cached]]
-            assert torch.equal(cache_indices, torch.tensor([0]))
             out = x.clone()
-            out[is_cached] = history.emb[cache_indices]
+            assert torch.equal(out[1], torch.zeros(4))
+            for j, id in enumerate(nb.n_id[:batch_size]):
+                if history.cached_nodes[id]:
+                    embidx = history.emb_idx[id]
+                    assert embidx == 0
+                    emb = history.emb[embidx]
+                    out[j] = emb
             assert not torch.equal(out[0], torch.tensor([3.3, 3.4, 3.5, 3.6]))
             assert torch.equal(out[1], torch.tensor([3.3, 3.4, 3.5, 3.6]))
     loss = F.nll_loss(x, torch.tensor([1]))
@@ -311,21 +302,12 @@ def test_small_push():
         if i != num_layers - 1:  # last layer is not saved
             history = histories[i]
             assert torch.equal(histories[0].emb[0], torch.zeros(4))
-            # for i, id in enumerate(pruned_nodes[i + 1]):
-            #     if not history.cached_nodes[
-            #             id] and history.need_cache_nodes[id] != -1:
-            #         embidx = history.need_cache_nodes[id]
-            #         assert embidx == 0
-            #         history.emb[embidx] = x[i]
-            #         assert i == 1
-            #         history.cached_nodes[id] = True
-            layer_id = pruned_nodes[i + 1]
-            need_cache = (history.cached_nodes[layer_id] == False) & (
-                history.need_cache_nodes[layer_id] != -1)
-            cache_indices = history.need_cache_nodes[layer_id][need_cache]
-
-            history.emb[cache_indices] = x[need_cache]
-            history.cached_nodes[layer_id[need_cache]] = True
+            for j, id in enumerate(nb.n_id[:batch_size]):
+                if history.emb_idx[id] != -1:
+                    embidx = history.emb_idx[id]
+                    assert embidx == 0
+                    history.emb[embidx] = x[j]
+                    history.cached_nodes[id] = True
             assert not torch.equal(histories[0].emb[0], torch.zeros(4))
             assert torch.equal(
                 history.cached_nodes,
@@ -362,7 +344,7 @@ def test_init_history():
         histories[0].cached_nodes,
         torch.tensor([False, False, False, False, False, False, False, False]))
     assert histories[0].emb.size() == (1, 4)
-    assert torch.equal(histories[0].need_cache_nodes,
+    assert torch.equal(histories[0].emb_idx,
                        torch.tensor([-1, -1, -1, 0, -1, -1, -1, -1]))
 
 

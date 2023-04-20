@@ -50,7 +50,7 @@ def test_acc():
                 History(cacheid, len(n_id), hidden_channels, device)
                 for cacheid in cached_id
             ])
-            print(torch.cuda.max_memory_allocated() / 10**6)
+            # print(torch.cuda.max_memory_allocated() / 10**6)
             for i, nb in enumerate(nano_batchs):
                 adjs = [adj.to(device) for adj in nb.adjs]
                 nbid = nb.n_id.to(device)
