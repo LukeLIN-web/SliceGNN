@@ -20,10 +20,16 @@ class History(torch.nn.Module):
         self.embedding_dim = embedding_dim
 
         pin_memory = device is None or str(device) == "cpu"
-        self.global_idx = torch.tensor(cached_id,
-                                       device=device,
-                                       dtype=torch.int64,
-                                       pin_memory=pin_memory)
+        self.need_cache_nodes = torch.full(
+            (num_embeddings, ),
+            -1,
+            dtype=torch.long,
+            device=device,
+            pin_memory=pin_memory)  # push embedding or not
+
+        tensor_1d = torch.tensor(cached_id, device=device)
+        values = torch.arange(len(tensor_1d), device=device)
+        self.need_cache_nodes.scatter_(0, tensor_1d, values)
 
         self.emb = torch.empty(num_cache,
                                embedding_dim,
@@ -47,48 +53,39 @@ class History(torch.nn.Module):
         self.pull(x, inter_id)
         self.push(x, inter_id)
 
-    def pull(self, x: Tensor, inter_id: Tensor, layer_id: Tensor) -> Tensor:
-        # out = x.clone()
-        # for id in inter_id:
-        #     if self.cached_nodes[id]:
-        #         # print("pulling")
-        #         embidx = torch.where(self.global_idx == id)[0]
-        #         emb = self.emb[embidx]
-        #         xidx = torch.where(layer_id == id)[0]
-        #         out[xidx] = emb
-        #     else:
-        #         # print("need cache , but not pushed")
-        #         pass
-        # return out
+    def pull(self, x: Tensor, layer_id: Tensor) -> Tensor:
+        # Assuming that `layer_id` is a tensor with shape (n,) and `x` is a tensor with shape (n, d).
+
+        # create a boolean tensor to identify which nodes are cached
+        is_cached = self.cached_nodes[layer_id]
+
+        # select the indices of nodes that are cached
+        cache_indices = self.need_cache_nodes[layer_id[is_cached]]
+
+        # clone the input tensor
         out = x.clone()
-        cached_id = inter_id[self.cached_nodes[inter_id]]
-        cached_embidx = torch.where(
-            self.global_idx.unsqueeze(-1) == cached_id)[0]
-        if len(cached_embidx) > 0:
-            cached_xidx = torch.where(layer_id.unsqueeze(-1) == cached_id)[0]
-            out[cached_xidx, :] = self.emb[cached_embidx[:len(cached_xidx)], :]
+        # copy the cached embeddings to the output tensor
+        print(is_cached.shape, out.shape)
+        out[is_cached] = self.emb[cache_indices]
+
         return out
 
     @torch.no_grad()
-    def push(self, x: Tensor, inter_id: Tensor, layer_id: Tensor) -> Tensor:
-        # for id in inter_id:
-        #     if self.cached_nodes[id]:
-        #         # print("have pushed")
-        #         pass
-        #     else:
-        #         # print("pushing")
-        #         embidx = torch.where(self.global_idx == id)[0]
-        #         xidx = torch.where(layer_id == id)[0]
-        #         self.emb[embidx] = x[xidx]
-        #         self.cached_nodes[id] = True
-        uncached_id = inter_id[~self.cached_nodes[inter_id]]
-        uncached_embidx = torch.where(
-            self.global_idx.unsqueeze(-1) == uncached_id)[0]
-        if len(uncached_embidx) > 0:
-            uncached_xidx = torch.where(
-                layer_id.unsqueeze(-1) == uncached_id)[0]
-            self.emb[uncached_embidx] = x[uncached_xidx]
-            self.cached_nodes[uncached_id] = True
+    def push(self, x: Tensor, layer_id: Tensor) -> Tensor:
+        # Assuming that `layer_id` is a tensor with shape (n,) and `x` is a tensor with shape (n, d).
+
+        # create a boolean tensor to identify which nodes need to be cached
+        need_cache = (self.cached_nodes[layer_id]
+                      == False) & (self.need_cache_nodes[layer_id] != -1)
+
+        # select the indices of nodes that need to be cached
+        cache_indices = self.need_cache_nodes[layer_id][need_cache]
+
+        # copy the corresponding input tensor values to the embeddings
+        self.emb[cache_indices] = x[need_cache]
+        # update the cached_nodes boolean tensor
+        self.cached_nodes[layer_id[need_cache]] = True
+        return x
 
     def forward(self, *args, **kwargs):
         """"""

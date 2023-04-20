@@ -52,11 +52,8 @@ class ScaleSAGE(ScalableGNN):
             if i != self.num_layers - 1:  # last layer is not saved
                 x = F.relu(x)
                 history: History = histories[i]
-                interid = get_intersection(n_id[:batch_size],
-                                           history.global_idx)
-                if len(interid) > 0:
-                    x = history.pull(x, interid, pruned_nodes[i + 1])
-                    history.push(x, interid, pruned_nodes[i + 1])
+                x = history.pull(x, pruned_nodes[i + 1])
+                history.push(x, pruned_nodes[i + 1])
                 # x = F.dropout(x, p=0.5, training=self.training)
         return x.log_softmax(dim=-1)
 
