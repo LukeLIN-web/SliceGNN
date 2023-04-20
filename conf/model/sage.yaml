@@ -1,20 +1,16 @@
 params:
   reddit:
-    num_layers: 2
     hop: [25, 10]
     batch_size: 1024
 
   yelp:
-    num_layers: 2
     hop: [25, 10]
     batch_size: 1024
 
   ogbn-products:
-    num_layers: 3
-    hop: [10, 10,10]
-    batch_size: 1024
+    hop: [10, 10, 10]
+    batch_size: 2048
 
   papers100M:
-    num_layers: 3
     hop: [15, 10, 5]
     batch_size: 1024

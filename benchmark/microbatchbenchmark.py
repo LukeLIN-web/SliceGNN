@@ -52,7 +52,8 @@ def train(conf):
         )
     else:
         train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
-    gpu_num, per_gpu, layers = conf.num_train_worker, conf.nano_pergpu, params.num_layers
+    gpu_num, per_gpu, layers = conf.num_train_worker, conf.nano_pergpu, len(
+        params.hop)
     train_loader = torch.utils.data.DataLoader(train_idx,
                                                batch_size=params.batch_size *
                                                gpu_num,
@@ -104,7 +105,7 @@ def train(conf):
     metric = cal_metrics(epochtimes)
     log.log(
         logging.INFO,
-        f',scalesage,{dataset_name},{gpu_num * per_gpu},{layers},{metric["mean"]:.2f}, {maxgpu:.2f}',
+        f',nano,{dataset_name},{gpu_num * per_gpu},{layers},{metric["mean"]:.2f},{params.batch_size} ,{maxgpu:.2f}',
     )
 
     # if dataset_name == "ogbn-products" or dataset_name == "papers100M":

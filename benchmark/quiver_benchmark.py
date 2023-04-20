@@ -30,7 +30,8 @@ def train(conf):
     rank = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
     torch.cuda.set_device(rank)
     torch.manual_seed(12345)
-    gpu_num, per_gpu, layers = conf.num_train_worker, conf.nano_pergpu, params.num_layers
+    gpu_num, per_gpu, layers = conf.num_train_worker, conf.nano_pergpu, len(
+        params.hop)
     model = SAGE(data.num_features, conf.hidden_channels, dataset.num_classes,
                  layers).to(rank)
     csr_topo = quiver.CSRTopo(data.edge_index)
@@ -100,7 +101,7 @@ def train(conf):
     metric = cal_metrics(epochtimes)
     log.log(
         logging.INFO,
-        f',scalesage,{dataset_name},{gpu_num * per_gpu},{layers},{metric["mean"]:.2f}, {maxgpu:.2f}',
+        f',origin,{dataset_name},{gpu_num * per_gpu},{layers},{metric["mean"]:.2f},{params.batch_size} ,{maxgpu:.2f}',
     )
 
     # if dataset_name == "ogbn-products":
