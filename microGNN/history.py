@@ -58,14 +58,15 @@ class History(torch.nn.Module):
 
         # create a boolean tensor to identify which nodes are cached
         is_cached = self.cached_nodes[layer_id]
-
+        print(is_cached.shape, x.shape)
         # select the indices of nodes that are cached
         cache_indices = self.need_cache_nodes[layer_id[is_cached]]
+        print(cache_indices.shape)
 
         # clone the input tensor
         out = x.clone()
         # copy the cached embeddings to the output tensor
-        print(is_cached.shape, out.shape)
+        # print(is_cached.shape, out.shape)
         out[is_cached] = self.emb[cache_indices]
 
         return out
