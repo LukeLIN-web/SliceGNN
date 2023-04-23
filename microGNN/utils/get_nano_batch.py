@@ -226,8 +226,6 @@ def get_nano_batch_histories(
         n_id (torch.Tensor): Node indices.
         batch_size: mini batch size
         num_nano_batch:  nano batch number
-
-    :rtype: List[List[Tensor,int,list]]
     """
     assert (batch_size >= num_nano_batch
             ), "batch_size must be bigger than num_nano_batch"  # noqa
@@ -258,8 +256,11 @@ def get_nano_batch_histories(
             if j != num_layers - 1:
                 cache_mask = torch.logical_not(cached_nodes[j][sub_nid])
                 cached_nodes[j][sub_nid[cache_mask]] = True
-                cached_id[j] += sub_nid[torch.logical_not(cache_mask)].tolist()
+                cached_id[j].append(sub_nid[torch.logical_not(cache_mask)])
             subadjs.append(Adj(sub_adjs, None, (len(sub_nid), target_size)))
         subadjs.reverse()  # O(n) 大的在前面
         nano_batchs.append(Nanobatch(sub_nid, nano_batch_size, subadjs))
-    return nano_batchs, cached_id
+    cached_tensor = []
+    for ids in cached_id:
+        cached_tensor.append(torch.cat(ids))
+    return nano_batchs, cached_tensor

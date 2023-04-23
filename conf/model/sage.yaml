@@ -9,7 +9,7 @@ params:
 
   ogbn-products:
     hop: [10, 10, 10]
-    batch_size: 2048
+    batch_size: 1024
 
   papers100M:
     hop: [15, 10, 5]

@@ -8,13 +8,11 @@ class History(torch.nn.Module):
     r"""A historical embedding storage module."""
 
     def __init__(self,
-                 cached_id: List,
+                 cached_id: Tensor,
                  num_embeddings: int,
                  embedding_dim: int,
                  device=None):
         super().__init__()
-
-        num_cache = len(cached_id)
 
         self.num_embeddings = num_embeddings
         self.embedding_dim = embedding_dim
@@ -25,13 +23,13 @@ class History(torch.nn.Module):
             -1,
             dtype=torch.long,
             device=device,
-            pin_memory=pin_memory)  # push embedding or not
+            pin_memory=pin_memory)  # corrsponding index in self.emb
 
-        tensor_1d = torch.tensor(cached_id, device=device)
-        values = torch.arange(len(tensor_1d), device=device)
-        self.emb_idx.scatter_(0, tensor_1d, values)
+        cached_id = cached_id.to(device)
+        values = torch.arange(len(cached_id), device=device)
+        self.emb_idx.scatter_(0, cached_id, values)
 
-        self.emb = torch.empty(num_cache,
+        self.emb = torch.empty(len(cached_id),
                                embedding_dim,
                                device=device,
                                pin_memory=pin_memory)
