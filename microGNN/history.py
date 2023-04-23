@@ -39,7 +39,7 @@ class History(torch.nn.Module):
             False,
             dtype=torch.bool,
             device=device,
-            pin_memory=pin_memory)  # push embedding or not
+            pin_memory=pin_memory)  # pushed embedding or not
 
         self.reset_parameters()
 
@@ -70,7 +70,7 @@ class History(torch.nn.Module):
 
     def forward(self, *args, **kwargs):
         """"""
-        raise NotImplementedError  # hisotry不是model,只是用了数据结构.
+        raise NotImplementedError  # history is not model, only use for storage
 
     def __repr__(self) -> str:
         return (f"{self.__class__.__name__}({self.num_embeddings}, "

@@ -1,7 +1,3 @@
-"""
-sample : quiver
-1gpu
-"""
 import logging
 from timeit import default_timer
 
