@@ -30,7 +30,8 @@ def train(conf):
     rank = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
     torch.cuda.set_device(rank)
     torch.manual_seed(12345)
-    gpu_num, per_gpu, layers = conf.num_train_worker, conf.nano_pergpu, params.num_layers
+    gpu_num, per_gpu, layers = conf.num_train_worker, conf.nano_pergpu, len(
+        params.hop)
     model = SAGE(data.num_features, conf.hidden_channels, dataset.num_classes,
                  layers).to(rank)
     csr_topo = quiver.CSRTopo(data.edge_index)
@@ -96,11 +97,52 @@ def train(conf):
             epochtimes.append(epochtime)
         print(f"Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {epochtime}")
     maxgpu = torch.cuda.max_memory_allocated() / 10**9
+    print("train finished")
     metric = cal_metrics(epochtimes)
     log.log(
         logging.INFO,
-        f',scalesage,{dataset_name},{gpu_num * per_gpu},{layers},{metric["mean"]:.2f}, {maxgpu:.2f}',
+        f',origin,{dataset_name},{gpu_num * per_gpu},{layers},{metric["mean"]:.2f},{params.batch_size} ,{maxgpu:.2f}',
     )
+    # if dataset_name == "ogbn-products":
+    #     evaluator = Evaluator(name=dataset_name)
+    #     model.eval()
+    #     out = model.inference(x, rank, subgraph_loader)
+
+    #     y_true = y.cpu()
+    #     y_pred = out.argmax(dim=-1, keepdim=True)
+
+    #     acc1 = evaluator.eval({
+    #         'y_true': y_true[train_idx],
+    #         'y_pred': y_pred[train_idx],
+    #     })['acc']
+    #     acc2 = evaluator.eval({
+    #         'y_true': y_true[valid_idx],
+    #         'y_pred': y_pred[valid_idx],
+    #     })['acc']
+    #     acc3 = evaluator.eval({
+    #         'y_true': y_true[test_idx],
+    #         'y_pred': y_pred[test_idx],
+    #     })['acc']
+    #     print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
+    # elif dataset_name == "papers100M":
+    #     pass
+    # else:
+    #     model.eval()
+    #     with torch.no_grad():
+    #         out = model.inference(x, rank, subgraph_loader)
+    #     res = out.argmax(dim=-1) == y  #  big graph may oom
+    #     acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
+    #     assert acc1 > 0.90, "Sanity check , Low training accuracy."
+    #     acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
+    #     acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
+    #     print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
+
+    # metric = cal_metrics(epochtimes)
+    # log.log(
+    #     logging.INFO,
+    #     f',origin,{dataset_name},{gpu_num * per_gpu},{layers},{metric["mean"]:.2f}, {maxgpu:.2f}, {acc3:.4f}',
+    # )
+
     # if dataset_name == "ogbn-products":
     #     evaluator = Evaluator(name=dataset_name)
     #     model.eval()

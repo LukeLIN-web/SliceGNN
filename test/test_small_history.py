@@ -17,7 +17,7 @@ hidden_channels = 4
 out_channels = 2
 node_num = 8
 features = [[i for j in range(in_channels)] for i in range(node_num)]
-labels = [[i % 2] for i in range(node_num)]
+labels = [i % 2 for i in range(node_num)]
 # yapf: disable
 edge_index = torch.tensor([[2, 3, 3, 4, 5, 6, 7],
                             [0, 0, 1, 1, 2, 3, 4]], dtype=torch.long) # noqa
@@ -40,11 +40,10 @@ def test_same_out(device):
     nano_batchs, cached_id = get_nano_batch_histories(adjs,
                                                       mb_n_id,
                                                       batch_size=2,
-                                                      node_num=node_num,
                                                       num_nano_batch=2,
                                                       relabel_nodes=True)
     histories = torch.nn.ModuleList([
-        History(cacheid, node_num, hidden_channels, device)
+        History(cacheid, len(n_id), hidden_channels, device)
         for cacheid in cached_id
     ])
     nb = nano_batchs[0]
@@ -53,62 +52,41 @@ def test_same_out(device):
 
     model1 = ScaleSAGE(in_channels, hidden_channels, out_channels,
                        num_layers).to(device)
-    nbid = nb.n_id.to(device)
-    out1 = model1(x[n_id][nbid], nbid, adjs, histories)
+    nb1id = nb.n_id.to(device)
+    out1 = model1(x[n_id][nb1id], nb1id, adjs, histories)
 
     model2 = SAGE(in_channels, hidden_channels, out_channels,
                   num_layers).to(device)
     model2.load_state_dict(model1.state_dict())
-    for param in model1.parameters():
-        print(param)
-    print('------------------')
-    for param in model2.parameters():
-        print(param)
     out2 = model2(x[n_id][nb.n_id], adjs)
-    print(out1)
-    print(out2)
-    # assert torch.allclose(out1, out2)
+    assert torch.equal(out1, out2)
 
     target_node = n_id[:batch_size]
     y = torch.tensor(labels, dtype=torch.long).to(device)
-    loss1 = F.nll_loss(out1, y[target_node][nb.size])
-    loss2 = F.nll_loss(out2, y[target_node][nb.size])
+    loss1 = F.nll_loss(out1, y[target_node][:nb.size])
+    loss2 = F.nll_loss(out2, y[target_node][:nb.size])
     loss1.backward()
     loss2.backward()
 
-    grad1 = [
-        param.grad.clone().view(-1) for param in model1.parameters()
-        if param.grad is not None
-    ]
-    grad2 = [
-        param.grad.clone().view(-1) for param in model2.parameters()
-        if param.grad is not None
-    ]
-    print(torch.cat(grad1))
-    print(torch.cat(grad2))
+    grad1 = [param.grad.clone().view(-1) for param in model1.parameters()]
+    grad2 = [param.grad.clone().view(-1) for param in model2.parameters()]
     assert torch.equal(torch.cat(grad1), torch.cat(grad2))
 
-    # nb1 = nano_batchs[1]
-    # adjs = [adj.to(device) for adj in nb1.adjs]
-    # nbid = nb1.n_id.to(device)
-    # out1 = model1(x[n_id][nbid], nbid, adjs, histories)
-    # out2 = model2(x[n_id][nb1.n_id], adjs)
-    # assert torch.equal(out1, out2)
-    # loss1 = F.nll_loss(out1, y[target_node][nb1.size])
-    # loss2 = F.nll_loss(out2, y[target_node][nb1.size])
-    # assert torch.equal(loss1, loss2)
-    # loss1.backward()
-    # loss2.backward()
-    # grad1 = [
-    #     param.grad.clone().view(-1) for param in model1.parameters()
-    #     if param.grad is not None
-    # ]
-    # grad2 = [
-    #     param.grad.clone().view(-1) for param in model2.parameters()
-    #     if param.grad is not None
-    # ]
-    # # only first hop gradient keeped
-    # assert torch.equal(torch.cat(grad1[-3:]), torch.cat(grad2[-3:]))
+    nb1 = nano_batchs[1]
+    adjs = [adj.to(device) for adj in nb1.adjs]
+    nb1id = nb1.n_id.to(device)
+    out1 = model1(x[n_id][nb1id], nb1id, adjs, histories)
+    out2 = model2(x[n_id][nb1.n_id], adjs)
+    assert torch.equal(out1, out2)
+    loss1 = F.nll_loss(out1, y[target_node][nb1.size:2 * nb1.size])
+    loss2 = F.nll_loss(out2, y[target_node][nb1.size:2 * nb1.size])
+    assert torch.equal(loss1, loss2)
+    loss1.backward()
+    loss2.backward()
+    grad1 = [param.grad.clone().view(-1) for param in model1.parameters()]
+    grad2 = [param.grad.clone().view(-1) for param in model2.parameters()]
+    # only first hop gradient keeped
+    assert torch.equal(torch.cat(grad1[-3:]), torch.cat(grad2[-3:]))
 
 
 @withCUDA
@@ -124,7 +102,6 @@ def test_gradient(device):
     nano_batchs, cached_id = get_nano_batch_histories(adjs,
                                                       mb_n_id,
                                                       batch_size=2,
-                                                      node_num=node_num,
                                                       num_nano_batch=2,
                                                       relabel_nodes=True)
     histories = torch.nn.ModuleList([
@@ -141,7 +118,7 @@ def test_gradient(device):
     out1 = model1(x[n_id][nbid], nbid, adjs, histories)
     target_node = n_id[:batch_size]
     y = torch.tensor(labels, dtype=torch.long).to(device)
-    loss1 = F.nll_loss(out1, y[target_node][nb.size])
+    loss1 = F.nll_loss(out1, y[target_node][:nb.size])
     loss1.backward()
     for param in model1.parameters():
         assert param.grad is not None
@@ -161,29 +138,28 @@ def test_small_save_embedding():
     nano_batchs, cached_id = get_nano_batch_histories(adjs,
                                                       mb_n_id,
                                                       batch_size=2,
-                                                      node_num=node_num,
                                                       num_nano_batch=2,
                                                       relabel_nodes=True)
+
     histories = torch.nn.ModuleList([
         History(cacheid, node_num, hidden_channels, 'cpu')
         for cacheid in cached_id
     ])
+    assert torch.equal(histories[0].emb_idx,
+                       torch.tensor([-1, -1, -1, 0, -1, -1, -1, -1]))
 
+    convs = torch.nn.ModuleList()
+    convs.append(
+        SAGEConv(in_channels, hidden_channels, root_weight=False, bias=False))
+    convs.append(
+        SAGEConv(hidden_channels, out_channels, root_weight=False, bias=False))
     nb = nano_batchs[0]
     x = torch.tensor(features, dtype=torch.float)
     model(x[n_id][nb.n_id], nb.n_id, nb.adjs, histories)
-    assert not torch.all(x == 0)
     assert torch.equal(
         histories[0].cached_nodes,
         torch.tensor([False, False, False, True, False, False, False, False]))
-    histories[0].reset_parameters()
-
-    nb = nano_batchs[1]
-    model(x[n_id][nb.n_id], nb.n_id, nb.adjs, histories)
-    assert not torch.all(x == 0)
-    assert torch.equal(
-        histories[0].cached_nodes,
-        torch.tensor([False, False, False, True, False, False, False, False]))
+    assert not torch.equal(histories[0].emb[0], torch.zeros(4))
 
 
 def test_small_histfunction():
@@ -201,7 +177,6 @@ def test_small_histfunction():
     nano_batchs, cached_id = get_nano_batch_histories(adjs,
                                                       mb_n_id,
                                                       batch_size=2,
-                                                      node_num=node_num,
                                                       num_nano_batch=2,
                                                       relabel_nodes=True)
     histories = torch.nn.ModuleList([
@@ -216,23 +191,21 @@ def test_small_histfunction():
         [False, False, False, True, False, False, False, False])
     histories[0].emb[0] = torch.tensor([3.3, 3.4, 3.5, 3.6])  # should be pull
 
-    for i, adj in enumerate(nb.adjs):
-        batch_size = adj.size[1]
+    pruned_adjs, pruned_nodes = prune_computation_graph(
+        nb.n_id, nb.adjs, histories)
+
+    for i, adj in enumerate(pruned_adjs):
+        batch_size = nb.adjs[i].size[1]
         x_target = x[:batch_size]  # require 前size[0]个节点是 layer nodes
         x = convs[i]((x, x_target),
                      adj.edge_index)  # compute the non cached nodes embedding
         if i != num_layers - 1:  # last layer is not saved
             history = histories[i]
-            interid = get_intersection(nb.n_id[:batch_size],
-                                       history.global_idx)
-            x = history.pull(x, interid, nb.n_id[:batch_size])
+            assert torch.equal(x[1], torch.zeros(4))
+            x = history.pull(x, pruned_nodes[i + 1])
             assert not torch.equal(x[0], torch.tensor([3.3, 3.4, 3.5, 3.6]))
             assert torch.equal(x[1], torch.tensor([3.3, 3.4, 3.5, 3.6]))
-            history.push(x, interid)
-            assert torch.equal(
-                history.cached_nodes,
-                torch.tensor(
-                    [False, False, False, True, False, False, False, False]))
+            history.push(x, pruned_nodes[i + 1])
     loss = F.nll_loss(x, torch.tensor([1]))
     loss.backward()
     for param in convs.parameters():
@@ -254,36 +227,38 @@ def test_small_pull():
     nano_batchs, cached_id = get_nano_batch_histories(adjs,
                                                       mb_n_id,
                                                       batch_size=2,
-                                                      node_num=node_num,
                                                       num_nano_batch=2,
                                                       relabel_nodes=True)
-    his = []
-    for i, cacheid in enumerate(cached_id):
-        his.append(History(cacheid, node_num, hidden_channels, 'cpu'))
-    histories = torch.nn.ModuleList(his)
-    nb = nano_batchs[1]
-
-    x = torch.tensor(features, dtype=torch.float)
-    x = x[mb_n_id][nb.n_id]
+    histories = torch.nn.ModuleList([
+        History(cacheid, node_num, hidden_channels, 'cpu')
+        for cacheid in cached_id
+    ])
     histories[0].cached_nodes = torch.tensor(
         [False, False, False, True, False, False, False, False])
     histories[0].emb[0] = torch.tensor([3.3, 3.4, 3.5, 3.6])  # should be pull
 
-    for i, adj in enumerate(nb.adjs):
-        batch_size = adj.size[1]
-        x_target = x[:adj.size[1]]  # require 前size[0]个节点是 layer nodes
+    nb = nano_batchs[1]
+    pruned_adjs, pruned_nodes = prune_computation_graph(
+        nb.n_id, nb.adjs, histories)
+
+    x = torch.tensor(features, dtype=torch.float)
+    x = x[mb_n_id][nb.n_id]
+
+    for i, adj in enumerate(pruned_adjs):
+        batch_size = nb.adjs[i].size[1]
+        x_target = x[:batch_size]  # require 前size[0]个节点是 layer nodes
         x = convs[i]((x, x_target),
                      adj.edge_index)  # compute the non cached nodes embedding
         if i != num_layers - 1:  # last layer is not saved
             history = histories[i]
-            inter_id = get_intersection(nb.n_id[:batch_size],
-                                        history.global_idx)
             out = x.clone()
-            for j, id in enumerate(inter_id):
-                embidx = torch.where(history.global_idx == id)[0]
-                emb = history.emb[embidx]
-                xidx = torch.where(nb.n_id[:batch_size] == id)[0]
-                out[xidx] = emb
+            assert torch.equal(out[1], torch.zeros(4))
+            for j, id in enumerate(nb.n_id[:batch_size]):
+                if history.cached_nodes[id]:
+                    embidx = history.emb_idx[id]
+                    assert embidx == 0
+                    emb = history.emb[embidx]
+                    out[j] = emb
             assert not torch.equal(out[0], torch.tensor([3.3, 3.4, 3.5, 3.6]))
             assert torch.equal(out[1], torch.tensor([3.3, 3.4, 3.5, 3.6]))
     loss = F.nll_loss(x, torch.tensor([1]))
@@ -307,36 +282,33 @@ def test_small_push():
     nano_batchs, cached_id = get_nano_batch_histories(adjs,
                                                       mb_n_id,
                                                       batch_size=2,
-                                                      node_num=node_num,
                                                       num_nano_batch=2,
                                                       relabel_nodes=True)
-    his = []
-    for i, cacheid in enumerate(cached_id):
-        his.append(History(cacheid, node_num, hidden_channels, 'cpu'))
-    histories = torch.nn.ModuleList(his)
+    histories = torch.nn.ModuleList([
+        History(cacheid, node_num, hidden_channels, 'cpu')
+        for cacheid in cached_id
+    ])
     nb = nano_batchs[1]
-
+    pruned_adjs, pruned_nodes = prune_computation_graph(
+        nb.n_id, nb.adjs, histories)
     x = torch.tensor(features, dtype=torch.float)
     x = x[mb_n_id][nb.n_id]
 
-    for i, adj in enumerate(nb.adjs):
+    for i, adj in enumerate(pruned_adjs):
         batch_size = adj.size[1]
-        x_target = x[:adj.size[1]]  # require 前size[0]个节点是 layer nodes
+        x_target = x[:batch_size]  # require 前size[0]个节点是 layer nodes
         x = convs[i]((x, x_target),
                      adj.edge_index)  # compute the non cached nodes embedding
         if i != num_layers - 1:  # last layer is not saved
             history = histories[i]
-            interid = get_intersection(nb.n_id[:batch_size],
-                                       history.global_idx)
-
-            cached_nodes = history.cached_nodes[interid]
-            uncached_idxs = torch.where(~cached_nodes)
-            uncached_ids = interid[uncached_idxs]
-            uncached_embs = x.detach()[uncached_idxs]
-            indices = torch.where(torch.isin(history.global_idx, uncached_ids))
-            history.emb[indices] = uncached_embs
-            assert not torch.any(torch.eq(history.emb, 0.0))
-            history.cached_nodes[uncached_ids] = True
+            assert torch.equal(histories[0].emb[0], torch.zeros(4))
+            for j, id in enumerate(nb.n_id[:batch_size]):
+                if history.emb_idx[id] != -1:
+                    embidx = history.emb_idx[id]
+                    assert embidx == 0
+                    history.emb[embidx] = x[j]
+                    history.cached_nodes[id] = True
+            assert not torch.equal(histories[0].emb[0], torch.zeros(4))
             assert torch.equal(
                 history.cached_nodes,
                 torch.tensor(
@@ -345,6 +317,35 @@ def test_small_push():
     loss.backward()
     for param in convs.parameters():
         assert param.grad is not None
+
+
+def test_init_history():
+    edge1 = torch.tensor([[2, 3, 3, 4], [0, 0, 1, 1]])
+    adjs1 = Adj(edge1, None, (5, 2))
+    edge2 = torch.tensor([[2, 3, 3, 4, 5, 6, 7], [0, 0, 1, 1, 2, 3, 4]])
+    adjs2 = Adj(edge2, None, (8, 5))
+    adjs = [adjs2, adjs1]
+    convs = torch.nn.ModuleList()
+    convs.append(
+        SAGEConv(in_channels, hidden_channels, root_weight=False, bias=False))
+    convs.append(
+        SAGEConv(hidden_channels, out_channels, root_weight=False, bias=False))
+
+    nano_batchs, cached_id = get_nano_batch_histories(adjs,
+                                                      mb_n_id,
+                                                      batch_size=2,
+                                                      num_nano_batch=2,
+                                                      relabel_nodes=True)
+    histories = torch.nn.ModuleList([
+        History(cacheid, node_num, hidden_channels, 'cpu')
+        for cacheid in cached_id
+    ])
+    assert torch.equal(
+        histories[0].cached_nodes,
+        torch.tensor([False, False, False, False, False, False, False, False]))
+    assert histories[0].emb.size() == (1, 4)
+    assert torch.equal(histories[0].emb_idx,
+                       torch.tensor([-1, -1, -1, 0, -1, -1, -1, -1]))
 
 
 if __name__ == "__main__":

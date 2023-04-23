@@ -9,7 +9,8 @@ from torch_geometric.testing.decorators import onlyCUDA, withCUDA
 import quiver
 from microGNN import History
 from microGNN.models import SAGE, ScaleSAGE
-from microGNN.utils import get_dataset, get_nano_batch
+from microGNN.utils import (get_dataset, get_nano_batch,
+                            get_nano_batch_histories)
 
 
 @onlyCUDA
@@ -91,25 +92,17 @@ def test_acc():
     data = dataset[0]
     csr_topo = quiver.CSRTopo(data.edge_index)
     quiver_sampler = quiver.pyg.GraphSageSampler(csr_topo,
-                                                 sizes=[10, 5],
-                                                 device=0,
+                                                 sizes=[10, 5, 5],
+                                                 device=1,
                                                  mode="GPU")
     train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
     train_loader = torch.utils.data.DataLoader(train_idx,
                                                batch_size=1024,
                                                shuffle=False,
                                                drop_last=True)
-    subgraph_loader = NeighborSampler(
-        data.edge_index,
-        node_idx=None,
-        sizes=[-1],
-        batch_size=2048,
-        shuffle=False,
-        num_workers=6,
-    )
-    device = torch.device("cuda:0")
+    device = torch.device("cuda:1")
     torch.manual_seed(12345)
-    num_layers = 2
+    num_layers = 3
     hidden_channels = 256
     model = ScaleSAGE(in_channels=data.num_features,
                       hidden_channels=hidden_channels,
@@ -124,11 +117,13 @@ def test_acc():
         for seeds in train_loader:
             n_id, batch_size, adjs = quiver_sampler.sample(seeds)
             target_node = n_id[:batch_size]
-            nano_batchs = get_nano_batch(adjs, n_id, batch_size, 2)
+            nano_batchs, cached_id = get_nano_batch_histories(
+                adjs, n_id, batch_size)
             histories = torch.nn.ModuleList([
-                History(len(n_id), hidden_channels, device)
-                for _ in range(num_layers - 1)
+                History(cacheid, len(n_id), hidden_channels, device)
+                for cacheid in cached_id
             ])
+            # print(torch.cuda.max_memory_allocated() / 10**6)
             for i, nb in enumerate(nano_batchs):
                 adjs = [adj.to(device) for adj in nb.adjs]
                 nbid = nb.n_id.to(device)
@@ -141,16 +136,6 @@ def test_acc():
         print(
             f"Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {default_timer() - epoch_start}"
         )
-
-    model.eval()
-    with torch.no_grad():
-        out = model.inference(x, device, subgraph_loader)
-    res = out.argmax(dim=-1) == y
-    acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
-    # assert acc1 > 0.94, "Sanity check , Low training accuracy."
-    acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
-    acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
-    print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
 
 
 @withCUDA
@@ -185,10 +170,11 @@ def test_real_dataset(device):
         model.train()
         for batch_size, n_id, adjs in train_loader:
             target_node = n_id[:batch_size]
-            nano_batchs = get_nano_batch(adjs, n_id, batch_size, 2)
+            nano_batchs, cached_id = get_nano_batch_histories(
+                adjs, n_id, batch_size=2, num_nano_batch=2, relabel_nodes=True)
             histories = torch.nn.ModuleList([
-                History(len(n_id), hidden_channels, device)
-                for _ in range(num_layers - 1)
+                History(cacheid, len(n_id), hidden_channels, device)
+                for cacheid in cached_id
             ])
             for i, nb in enumerate(nano_batchs):
                 adjs = [adj.to(device) for adj in nb.adjs]
@@ -207,10 +193,9 @@ def test_real_dataset(device):
     acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
     acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
     acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
+    print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
 
 
 if __name__ == "__main__":
-    # test_real_dataset("cpu")
-    # test_real_dataset("cuda:0")
-    # test_acc()
-    test_sageacc()
+    test_acc()
+    # test_real_dataset('cuda:0')

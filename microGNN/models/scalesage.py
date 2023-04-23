@@ -7,6 +7,7 @@ from torch_geometric.nn import SAGEConv
 
 from microGNN import History
 from microGNN.prune import prune_computation_graph
+from microGNN.utils import get_intersection
 
 
 class ScaleSAGE(torch.nn.Module):
@@ -38,18 +39,18 @@ class ScaleSAGE(torch.nn.Module):
     # history [0] is outer hop, [1] inner hop, [-1] is 1hop
     def forward(self, x: Tensor, n_id: Tensor, adjs: List,
                 histories: torch.nn.ModuleList) -> Tensor:
-        pruned_adjs = prune_computation_graph(n_id, adjs, histories)
-        for i, (edge_index, _, size) in enumerate(pruned_adjs):
-            batch_size = adjs[i].size[1]
+        pruned_adjs, pruned_nodes = prune_computation_graph(
+            n_id, adjs, histories)
+        for i, adj in enumerate(pruned_adjs):
+            batch_size = adjs[i].size[1]  # original batch size
             x_target = x[:batch_size]  # nano batch layer nodes
             x = self.convs[i]((x, x_target),
-                              edge_index)  # non cached nodes embedding
+                              adj.edge_index)  # non cached nodes embedding
             if i != self.num_layers - 1:  # last layer is not saved
                 x = F.relu(x)
                 history: History = histories[i]
                 x = history.pull(x, n_id[:batch_size])
-                history.push(
-                    x, n_id[:batch_size])  # Push all, including just pulled
+                history.push(x, n_id[:batch_size])
                 # x = F.dropout(x, p=0.5, training=self.training)
         return x.log_softmax(dim=-1)
 

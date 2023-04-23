@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List
 
 import torch
 from torch import Tensor
@@ -7,23 +7,39 @@ from torch import Tensor
 class History(torch.nn.Module):
     r"""A historical embedding storage module."""
 
-    def __init__(self, num_embeddings: int, embedding_dim: int, device=None):
+    def __init__(self,
+                 cached_id: Tensor,
+                 num_embeddings: int,
+                 embedding_dim: int,
+                 device=None):
         super().__init__()
 
         self.num_embeddings = num_embeddings
         self.embedding_dim = embedding_dim
 
         pin_memory = device is None or str(device) == "cpu"
-        self.emb = torch.empty(num_embeddings,
+        self.emb_idx = torch.full(
+            (num_embeddings, ),
+            -1,
+            dtype=torch.long,
+            device=device,
+            pin_memory=pin_memory)  # corrsponding index in self.emb
+
+        cached_id = cached_id.to(device)
+        values = torch.arange(len(cached_id), device=device)
+        self.emb_idx.scatter_(0, cached_id, values)
+
+        self.emb = torch.empty(len(cached_id),
                                embedding_dim,
                                device=device,
                                pin_memory=pin_memory)
-        self.cached_nodes = torch.full((num_embeddings, ),
-                                       False,
-                                       dtype=torch.bool,
-                                       device=device,
-                                       pin_memory=pin_memory)
-        self.device = device  # memory device
+
+        self.cached_nodes = torch.full(
+            (num_embeddings, ),
+            False,
+            dtype=torch.bool,
+            device=device,
+            pin_memory=pin_memory)  # push embedding or not
 
         self.reset_parameters()
 
@@ -31,31 +47,26 @@ class History(torch.nn.Module):
         self.emb.fill_(0)
         self.cached_nodes.fill_(False)
 
-    def pull(self, x: Tensor, n_id: Tensor) -> Tensor:
-        cached_nodes = self.cached_nodes[n_id]
-        emb = self.emb[n_id]
-        mask = cached_nodes.unsqueeze(1).expand(
-            x.size(0), x.size(1))  # expand to the same shape as x
+    def pull_push(self, x: Tensor, inter_id: Tensor):
+        self.pull(x, inter_id)
+        self.push(x, inter_id)
+
+    def pull(self, x: Tensor, target_id: Tensor) -> Tensor:
+        is_cached = self.cached_nodes[target_id]
+        cached_id = target_id[is_cached]
+        emb_indices = self.emb_idx[cached_id]
+        embeddings = self.emb[emb_indices]
         out = x.clone()
-        out.masked_fill_(mask, 0)
-        out += emb
+        out[is_cached] = embeddings
         return out
 
     @torch.no_grad()
-    def push(
-        self,
-        x: Tensor,
-        n_id: Tensor,
-    ):
-
-        if n_id is None and x.size(0) != self.num_embeddings:
-            raise ValueError
-
-        assert n_id.device == self.emb.device
-        tmp = x.detach()
-        assert id(x) != id(tmp)
-        self.emb[n_id] = tmp.to(self.emb.device)
-        self.cached_nodes[n_id] = True
+    def push(self, x: Tensor, target_id: Tensor) -> Tensor:
+        should_cache = (self.emb_idx[target_id] != -1)
+        tocacheid = target_id[should_cache]
+        emb_indices = self.emb_idx[tocacheid]
+        self.emb[emb_indices] = x[should_cache]
+        self.cached_nodes[tocacheid] = True
 
     def forward(self, *args, **kwargs):
         """"""
