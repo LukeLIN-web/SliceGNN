@@ -33,7 +33,7 @@ def train(conf):
         'inputs_channels': data.num_features,
         'hidden_channels': conf.hidden_channels,
         'output_channels': dataset.num_classes,
-        'num_heads': params.heads,
+        'num_heads': conf.heads,
         'num_layers': layers,
     }
     model = get_model(conf.model.name, model_params).to(rank)
@@ -50,7 +50,7 @@ def train(conf):
     feature = torch.zeros(data.x.shape)
     feature[:] = data.x
     x.from_cpu_tensor(feature)
-    y = data.y
+    y = data.y.to(rank)
 
     if dataset_name == "ogbn-products" or dataset_name == "papers100M":
         split_idx = dataset.get_idx_split()
@@ -100,12 +100,13 @@ def train(conf):
             epochtimes.append(epochtime)
         print(f"Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {epochtime}")
     maxgpu = torch.cuda.max_memory_allocated() / 10**9
-    print("train finished")
-    metric = cal_metrics(epochtimes)
-    log.log(
-        logging.INFO,
-        f',origin,{dataset_name},{gpu_num * per_gpu},{layers},{metric["mean"]:.2f},{params.batch_size} ,{maxgpu:.2f}',
-    )
+    print("train finished ")
+    print(f"max gpu memory {maxgpu:.2f} GB")
+    # metric = cal_metrics(epochtimes)
+    # log.log(
+    #     logging.INFO,
+    #     f',origin,{dataset_name},{gpu_num * per_gpu},{layers},{metric["mean"]:.2f},{params.batch_size} ,{maxgpu:.2f}',
+    # )
 
     model.eval()
     if dataset_name == "ogbn-products":
@@ -132,7 +133,7 @@ def train(conf):
         pass
     else:
         with torch.no_grad():
-            out = model.inference(x, rank, subgraph_loader)
+            out = model.inference(x, rank, subgraph_loader).cpu()
         res = out.argmax(dim=-1) == y.cpu()
         acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
         acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
