@@ -1,7 +1,7 @@
 from microGNN.models import GAT, SAGE, ScaleGAT, ScaleSAGE
 
 models_dict = {'gat': GAT, 'sage': SAGE}
-scale_models_dict = {'sage': ScaleSAGE, 'scalegat': ScaleGAT}
+scale_models_dict = {'sage': ScaleSAGE, 'gat': ScaleGAT}
 
 
 def get_model(name, params, scale=False):

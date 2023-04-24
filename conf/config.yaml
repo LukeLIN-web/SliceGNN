@@ -1,14 +1,12 @@
-hidden_channels: 128
 dropout: 0.5
-lr: 0.01
-num_epoch: 1
+num_epoch: 5
 nano_pergpu: 2
 num_train_worker: 1
 num_sample_worker: 1
-heads: 4
+
 
 defaults:
   - dataset: reddit
-  - model: sage
+  - model: gat
 
 root: "/data/ogb"

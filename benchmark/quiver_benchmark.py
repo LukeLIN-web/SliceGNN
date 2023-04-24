@@ -31,12 +31,12 @@ def train(conf):
         params.hop)
     model_params = {
         'inputs_channels': data.num_features,
-        'hidden_channels': conf.hidden_channels,
+        'hidden_channels': params.hidden_channels,
         'output_channels': dataset.num_classes,
         'num_heads': conf.heads,
         'num_layers': layers,
     }
-    model = get_model(conf.model.name, model_params).to(rank)
+    model = get_model(conf.model.name, model_params, scale=False).to(rank)
     csr_topo = quiver.CSRTopo(data.edge_index)
     quiver_sampler = quiver.pyg.GraphSageSampler(csr_topo,
                                                  sizes=params.hop,
@@ -50,7 +50,7 @@ def train(conf):
     feature = torch.zeros(data.x.shape)
     feature[:] = data.x
     x.from_cpu_tensor(feature)
-    y = data.y.to(rank)
+    y = data.y
 
     if dataset_name == "ogbn-products" or dataset_name == "papers100M":
         split_idx = dataset.get_idx_split()
@@ -72,11 +72,11 @@ def train(conf):
             data.edge_index,
             node_idx=None,
             sizes=[-1],
-            batch_size=2048,
+            batch_size=1024,
             shuffle=False,
             num_workers=14,
         )
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    optimizer = torch.optim.Adam(model.parameters(), lr=params.lr)
     epochtimes = []
     acc3 = -1
     for epoch in range(1, conf.num_epoch + 1):

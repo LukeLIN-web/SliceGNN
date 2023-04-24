@@ -6,6 +6,7 @@ import torch
 from ogb.nodeproppred import Evaluator
 from omegaconf import OmegaConf
 from torch_geometric.loader import NeighborSampler
+from utils import get_model
 
 import quiver
 from microGNN import History
@@ -57,22 +58,32 @@ def train(conf):
                                                num_workers=14,
                                                shuffle=False,
                                                drop_last=True)
-    # if dataset_name != "papers100M":
-    #     subgraph_loader = NeighborSampler(
-    #         data.edge_index,
-    #         node_idx=None,
-    #         sizes=[-1],
-    #         batch_size=2048,
-    #         shuffle=False,
-    #         num_workers=14,
-    #     )
-
-    model = ScaleSAGE(data.num_features, conf.hidden_channels,
-                      dataset.num_classes, layers).to(rank)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    if dataset_name != "papers100M":
+        subgraph_loader = NeighborSampler(
+            data.edge_index,
+            node_idx=None,
+            sizes=[-1],
+            batch_size=2048,
+            shuffle=False,
+            num_workers=14,
+        )
+    model_params = {
+        'inputs_channels': data.num_features,
+        'hidden_channels': params.hidden_channels,
+        'output_channels': dataset.num_classes,
+        'num_layers': layers,
+    }
+    if conf.model.name == "gat":
+        emb_dim = params.hidden_channels * params.heads
+        model_params['num_heads'] = params.heads
+    else:
+        emb_dim = params.hidden_channels
+    model = get_model(conf.model.name, model_params, scale=True).to(rank)
+    optimizer = torch.optim.Adam(model.parameters(), lr=params.lr)
     y = data.y
     epochtimes = []
     acc3 = -1
+
     for epoch in range(1, conf.num_epoch + 1):
         model.train()
         epoch_start = default_timer()
@@ -83,10 +94,9 @@ def train(conf):
             nano_batchs, cached_id = get_nano_batch_histories(
                 adjs, n_id, batch_size)
             histories = torch.nn.ModuleList([
-                History(cacheid, len(n_id), conf.hidden_channels, rank)
+                History(cacheid, len(n_id), emb_dim, rank)
                 for cacheid in cached_id
             ])
-            #3116.0 MB
             for i, nb in enumerate(nano_batchs):
                 adjs = [adj.to(rank) for adj in nb.adjs]
                 nbid = nb.n_id.to(rank)
@@ -97,7 +107,6 @@ def train(conf):
                     dataset_name)
                 loss.backward()
             optimizer.step()
-        #11886.000000 MB
         epochtime = default_timer() - epoch_start
         if epoch > 1:
             epochtimes.append(epochtime)
@@ -107,46 +116,45 @@ def train(conf):
     metric = cal_metrics(epochtimes)
     log.log(
         logging.INFO,
-        f',scalesage,{dataset_name},{gpu_num * per_gpu},{layers},{metric["mean"]:.2f},{params.batch_size}, {maxgpu:.2f}',
+        f',scale+{conf.model.name},{dataset_name},{gpu_num * per_gpu},{layers},{metric["mean"]:.2f},{params.batch_size}, {maxgpu:.2f}',
     )
 
-    # if dataset_name == "ogbn-products":
-    #     evaluator = Evaluator(name=dataset_name)
-    #     model.eval()
-    #     out = model.inference(x, rank, subgraph_loader)
+    model.eval()
+    if dataset_name == "ogbn-products":
+        evaluator = Evaluator(name=dataset_name)
+        out = model.inference(x, rank, subgraph_loader)
 
-    #     y_true = y.cpu()
-    #     y_pred = out.argmax(dim=-1, keepdim=True)
+        y_true = y.cpu()
+        y_pred = out.argmax(dim=-1, keepdim=True)
 
-    #     acc1 = evaluator.eval({
-    #         'y_true': y_true[train_idx],
-    #         'y_pred': y_pred[train_idx],
-    #     })['acc']
-    #     acc2 = evaluator.eval({
-    #         'y_true': y_true[valid_idx],
-    #         'y_pred': y_pred[valid_idx],
-    #     })['acc']
-    #     acc3 = evaluator.eval({
-    #         'y_true': y_true[test_idx],
-    #         'y_pred': y_pred[test_idx],
-    #     })['acc']
-    #     print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
-    # elif dataset_name == "papers100M":
-    #     pass
-    # else:
-    #     model.eval()
-    #     with torch.no_grad():
-    #         out = model.inference(x, rank, subgraph_loader)
-    #     res = out.argmax(dim=-1) == y
-    #     acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
-    #     assert acc1 > 0.90, "Sanity check , Low training accuracy."
-    #     acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
-    #     acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
-    #     print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
+        acc1 = evaluator.eval({
+            'y_true': y_true[train_idx],
+            'y_pred': y_pred[train_idx],
+        })['acc']
+        acc2 = evaluator.eval({
+            'y_true': y_true[valid_idx],
+            'y_pred': y_pred[valid_idx],
+        })['acc']
+        acc3 = evaluator.eval({
+            'y_true': y_true[test_idx],
+            'y_pred': y_pred[test_idx],
+        })['acc']
+        print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
+    elif dataset_name == "papers100M":
+        pass
+    else:
+        with torch.no_grad():
+            out = model.inference(x, rank, subgraph_loader).cpu()
+        res = out.argmax(dim=-1) == y.cpu()
+        acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
+        acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
+        acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
+        print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
+
     # metric = cal_metrics(epochtimes)
     # log.log(
     #     logging.INFO,
-    #     f',scalesage,{dataset_name},{gpu_num * per_gpu},{layers},{metric["mean"]:.2f},{params.batch_size}, {maxgpu:.2f}, {acc3:.4f}',
+    #     f',scale+{conf.model.name},{dataset_name},{gpu_num * per_gpu},{layers},{metric["mean"]:.2f},{params.batch_size}, {maxgpu:.2f}, {acc3:.4f}',
     # )
 
 

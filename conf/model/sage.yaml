@@ -3,14 +3,19 @@ params:
   reddit:
     hop: [25, 10]
     batch_size: 1024
+    lr: 0.01
+    hidden_channels: 256
 
   yelp:
     hop: [25, 10]
     batch_size: 1024
+    lr: 0.01
 
   ogbn-products:
     hop: [10, 10, 10]
-    batch_size: 10240
+    batch_size: 1024
+    lr: 0.01
+    hidden_channels: 256
 
   papers100M:
     hop: [15, 10, 5]

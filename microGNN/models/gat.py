@@ -106,7 +106,7 @@ class ScaleGAT(torch.nn.Module):
         for skip in self.skips:
             skip.reset_parameters()
 
-    def forward(self, x: Tensor, adjs: List, n_id: Tensor,
+    def forward(self, x: Tensor, n_id: Tensor, adjs: List,
                 histories: torch.nn.ModuleList):
         pruned_adjs = prune_computation_graph(n_id, adjs, histories)
         for i, adj in enumerate(pruned_adjs):
