@@ -1,58 +1,20 @@
 # Reaches around 0.7945 ± 0.0059 test accuracy.
-
+import logging
 from timeit import default_timer
 
 import hydra
 import torch
 import torch.nn.functional as F
-from ogb.nodeproppred import Evaluator, PygNodePropPredDataset
+from ogb.nodeproppred import Evaluator
 from omegaconf import OmegaConf
-from torch import Tensor
-from torch_geometric.datasets import Planetoid
 from torch_geometric.loader import NeighborSampler
 
 import quiver
 from microGNN import History
 from microGNN.models import GAT
-from microGNN.prune import prune_computation_graph
 from microGNN.utils import cal_metrics, get_dataset, get_nano_batch_histories
 
-# train_loader = NeighborSampler(data.edge_index,
-#                                node_idx=train_idx,
-#                                sizes=[10, 10, 10],
-#                                batch_size=512,
-#                                shuffle=True,
-#                                num_workers=12)
-# subgraph_loader = NeighborSampler(data.edge_index, node_idx=None, sizes=[-1],
-#                                   batch_size=1024, shuffle=False,
-#                                   num_workers=12)
-
-# y = data.y.squeeze().to(rank)
-
-
-@torch.no_grad()
-def test():
-    model.eval()
-
-    out = model.inference(x)
-
-    y_true = y.cpu().unsqueeze(-1)
-    y_pred = out.argmax(dim=-1, keepdim=True)
-
-    train_acc = evaluator.eval({
-        'y_true': y_true[split_idx['train']],
-        'y_pred': y_pred[split_idx['train']],
-    })['acc']
-    val_acc = evaluator.eval({
-        'y_true': y_true[split_idx['valid']],
-        'y_pred': y_pred[split_idx['valid']],
-    })['acc']
-    test_acc = evaluator.eval({
-        'y_true': y_true[split_idx['test']],
-        'y_pred': y_pred[split_idx['test']],
-    })['acc']
-
-    return train_acc, val_acc, test_acc
+log = logging.getLogger(__name__)
 
 
 @hydra.main(config_path="../conf", config_name="config", version_base="1.1")
@@ -97,6 +59,16 @@ def train(conf):
                                                num_workers=14,
                                                shuffle=False,
                                                drop_last=True)
+    if dataset_name != "papers100M":
+        subgraph_loader = NeighborSampler(
+            data.edge_index,
+            node_idx=None,
+            sizes=[-1],
+            batch_size=2048,
+            shuffle=False,
+            num_workers=14,
+        )
+
     model = GAT(dataset.num_features,
                 conf.hidden_channels,
                 dataset.num_classes,
@@ -104,16 +76,15 @@ def train(conf):
                 heads=params.heads)
     model = model.to(rank)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-    y = data.y.squeeze()
+    y = data.y.squeeze().to(rank)
     epochtimes = []
     acc3 = -1
     model.train()
     for epoch in range(1, conf.num_epoch + 1):
-
+        epoch_start = default_timer()
         for seeds in train_loader:
             optimizer.zero_grad()
             n_id, batch_size, adjs = quiver_sampler.sample(seeds)
-            epoch_start = default_timer()
             target_node = n_id[:batch_size]
             nano_batchs, cached_id = get_nano_batch_histories(
                 adjs, n_id, batch_size)
@@ -127,14 +98,56 @@ def train(conf):
                 nbid = nb.n_id.to(rank)
                 out = model(x[n_id][nb.n_id], adjs, nbid, histories)
                 loss = F.nll_loss(
-                    out,
-                    y[target_node][i * (nb.size):(i + 1) * (nb.size)].to(rank))
+                    out, y[target_node][i * (nb.size):(i + 1) * (nb.size)])
                 loss.backward()
             optimizer.step()
         epochtime = default_timer() - epoch_start
         if epoch > 1:
             epochtimes.append(epochtime)
         print(f"Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {epochtime}")
+    maxgpu = torch.cuda.max_memory_allocated() / 10**9
+    metric = cal_metrics(epochtimes)
+    log.log(
+        logging.INFO,
+        f',scalesage,{dataset_name},{gpu_num * per_gpu},{layers},{metric["mean"]:.2f},{params.batch_size}, {maxgpu:.2f}',
+    )
+
+    model.eval()
+    if dataset_name == "ogbn-products":
+        evaluator = Evaluator(name=dataset_name)
+        out = model.inference(x, rank, subgraph_loader)
+
+        y_true = y.cpu()
+        y_pred = out.argmax(dim=-1, keepdim=True)
+
+        acc1 = evaluator.eval({
+            'y_true': y_true[train_idx],
+            'y_pred': y_pred[train_idx],
+        })['acc']
+        acc2 = evaluator.eval({
+            'y_true': y_true[valid_idx],
+            'y_pred': y_pred[valid_idx],
+        })['acc']
+        acc3 = evaluator.eval({
+            'y_true': y_true[test_idx],
+            'y_pred': y_pred[test_idx],
+        })['acc']
+        print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
+    elif dataset_name == "papers100M":
+        pass
+    else:
+        with torch.no_grad():
+            out = model.inference(x, rank, subgraph_loader)
+        res = out.argmax(dim=-1) == y.cpu()
+        acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
+        acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
+        acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
+        print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
+    # metric = cal_metrics(epochtimes)
+    # log.log(
+    #     logging.INFO,
+    #     f',scalesage,{dataset_name},{gpu_num * per_gpu},{layers},{metric["mean"]:.2f},{params.batch_size}, {maxgpu:.2f}, {acc3:.4f}',
+    # )
 
 
 if __name__ == "__main__":

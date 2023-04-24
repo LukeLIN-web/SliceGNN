@@ -6,10 +6,11 @@ import torch
 from ogb.nodeproppred import Evaluator
 from omegaconf import OmegaConf
 from torch_geometric.loader import NeighborSampler
+from utils import get_model
 
 import quiver
-from microGNN.models import SAGE, criterion
-from microGNN.utils import cal_metrics, check_memory, get_dataset
+from microGNN.models import criterion
+from microGNN.utils import cal_metrics, get_dataset
 
 log = logging.getLogger(__name__)
 
@@ -28,8 +29,14 @@ def train(conf):
     torch.manual_seed(12345)
     gpu_num, per_gpu, layers = conf.num_train_worker, conf.nano_pergpu, len(
         params.hop)
-    model = SAGE(data.num_features, conf.hidden_channels, dataset.num_classes,
-                 layers).to(rank)
+    model_params = {
+        'inputs_channels': data.num_features,
+        'hidden_channels': conf.hidden_channels,
+        'output_channels': dataset.num_classes,
+        'num_heads': params.heads,
+        'num_layers': layers,
+    }
+    model = get_model(conf.model.name, model_params).to(rank)
     csr_topo = quiver.CSRTopo(data.edge_index)
     quiver_sampler = quiver.pyg.GraphSageSampler(csr_topo,
                                                  sizes=params.hop,
@@ -60,15 +67,15 @@ def train(conf):
                                                num_workers=14,
                                                shuffle=False,
                                                drop_last=True)
-    # if dataset_name != "papers100M":
-    #     subgraph_loader = NeighborSampler(
-    #         data.edge_index,
-    #         node_idx=None,
-    #         sizes=[-1],
-    #         batch_size=2048,
-    #         shuffle=False,
-    #         num_workers=14,
-    #     )
+    if dataset_name != "papers100M":
+        subgraph_loader = NeighborSampler(
+            data.edge_index,
+            node_idx=None,
+            sizes=[-1],
+            batch_size=2048,
+            shuffle=False,
+            num_workers=14,
+        )
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
     epochtimes = []
     acc3 = -1
@@ -99,79 +106,38 @@ def train(conf):
         logging.INFO,
         f',origin,{dataset_name},{gpu_num * per_gpu},{layers},{metric["mean"]:.2f},{params.batch_size} ,{maxgpu:.2f}',
     )
-    # if dataset_name == "ogbn-products":
-    #     evaluator = Evaluator(name=dataset_name)
-    #     model.eval()
-    #     out = model.inference(x, rank, subgraph_loader)
 
-    #     y_true = y.cpu()
-    #     y_pred = out.argmax(dim=-1, keepdim=True)
+    model.eval()
+    if dataset_name == "ogbn-products":
+        evaluator = Evaluator(name=dataset_name)
+        out = model.inference(x, rank, subgraph_loader)
 
-    #     acc1 = evaluator.eval({
-    #         'y_true': y_true[train_idx],
-    #         'y_pred': y_pred[train_idx],
-    #     })['acc']
-    #     acc2 = evaluator.eval({
-    #         'y_true': y_true[valid_idx],
-    #         'y_pred': y_pred[valid_idx],
-    #     })['acc']
-    #     acc3 = evaluator.eval({
-    #         'y_true': y_true[test_idx],
-    #         'y_pred': y_pred[test_idx],
-    #     })['acc']
-    #     print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
-    # elif dataset_name == "papers100M":
-    #     pass
-    # else:
-    #     model.eval()
-    #     with torch.no_grad():
-    #         out = model.inference(x, rank, subgraph_loader)
-    #     res = out.argmax(dim=-1) == y  #  big graph may oom
-    #     acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
-    #     assert acc1 > 0.90, "Sanity check , Low training accuracy."
-    #     acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
-    #     acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
-    #     print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
+        y_true = y.cpu()
+        y_pred = out.argmax(dim=-1, keepdim=True)
 
-    # metric = cal_metrics(epochtimes)
-    # log.log(
-    #     logging.INFO,
-    #     f',origin,{dataset_name},{gpu_num * per_gpu},{layers},{metric["mean"]:.2f}, {maxgpu:.2f}, {acc3:.4f}',
-    # )
-
-    # if dataset_name == "ogbn-products":
-    #     evaluator = Evaluator(name=dataset_name)
-    #     model.eval()
-    #     out = model.inference(x, rank, subgraph_loader)
-
-    #     y_true = y.cpu()
-    #     y_pred = out.argmax(dim=-1, keepdim=True)
-
-    #     acc1 = evaluator.eval({
-    #         'y_true': y_true[train_idx],
-    #         'y_pred': y_pred[train_idx],
-    #     })['acc']
-    #     acc2 = evaluator.eval({
-    #         'y_true': y_true[valid_idx],
-    #         'y_pred': y_pred[valid_idx],
-    #     })['acc']
-    #     acc3 = evaluator.eval({
-    #         'y_true': y_true[test_idx],
-    #         'y_pred': y_pred[test_idx],
-    #     })['acc']
-    #     print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
-    # elif dataset_name == "papers100M":
-    #     pass
-    # else:
-    #     model.eval()
-    #     with torch.no_grad():
-    #         out = model.inference(x, rank, subgraph_loader)
-    #     res = out.argmax(dim=-1) == y  #  big graph may oom
-    #     acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
-    #     assert acc1 > 0.90, "Sanity check , Low training accuracy."
-    #     acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
-    #     acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
-    #     print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
+        acc1 = evaluator.eval({
+            'y_true': y_true[train_idx],
+            'y_pred': y_pred[train_idx],
+        })['acc']
+        acc2 = evaluator.eval({
+            'y_true': y_true[valid_idx],
+            'y_pred': y_pred[valid_idx],
+        })['acc']
+        acc3 = evaluator.eval({
+            'y_true': y_true[test_idx],
+            'y_pred': y_pred[test_idx],
+        })['acc']
+        print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
+    elif dataset_name == "papers100M":
+        pass
+    else:
+        with torch.no_grad():
+            out = model.inference(x, rank, subgraph_loader)
+        res = out.argmax(dim=-1) == y.cpu()
+        acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
+        acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
+        acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
+        print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
 
     # metric = cal_metrics(epochtimes)
     # log.log(

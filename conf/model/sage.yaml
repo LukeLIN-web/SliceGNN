@@ -1,3 +1,4 @@
+name: sage
 params:
   reddit:
     hop: [25, 10]
