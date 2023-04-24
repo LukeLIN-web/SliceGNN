@@ -1,4 +1,4 @@
-hidden_channels: 256
+hidden_channels: 128
 dropout: 0.5
 lr: 0.01
 num_epoch: 5
@@ -7,7 +7,7 @@ num_train_worker: 1
 num_sample_worker: 1
 
 defaults:
-  - dataset: ogbn-products
-  - model: sage
+  - dataset: reddit
+  - model: gat
 
 root: "/data/ogb"
