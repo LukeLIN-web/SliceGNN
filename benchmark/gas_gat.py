@@ -11,7 +11,7 @@ from torch_geometric.loader import NeighborSampler
 
 import quiver
 from microGNN import History
-from microGNN.models import GAT
+from microGNN.models import ScaleGAT
 from microGNN.utils import cal_metrics, get_dataset, get_nano_batch_histories
 
 log = logging.getLogger(__name__)
@@ -69,11 +69,12 @@ def train(conf):
             num_workers=14,
         )
 
-    model = GAT(dataset.num_features,
-                conf.hidden_channels,
-                dataset.num_classes,
-                num_layers=3,
-                heads=params.heads)
+    model = ScaleGAT(dataset.num_features,
+                     params.hidden_channels,
+                     dataset.num_classes,
+                     num_layers=3,
+                     heads=params.heads)
+
     model = model.to(rank)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     y = data.y.squeeze().to(rank)
@@ -90,7 +91,7 @@ def train(conf):
                 adjs, n_id, batch_size)
             histories = torch.nn.ModuleList([
                 History(cacheid, len(n_id),
-                        conf.hidden_channels * params.heads, rank)
+                        params.hidden_channels * params.heads, rank)
                 for cacheid in cached_id
             ])
             for i, nb in enumerate(nano_batchs):
@@ -112,37 +113,37 @@ def train(conf):
         f',scalesage,{dataset_name},{gpu_num * per_gpu},{layers},{metric["mean"]:.2f},{params.batch_size}, {maxgpu:.2f}',
     )
 
-    model.eval()
-    if dataset_name == "ogbn-products":
-        evaluator = Evaluator(name=dataset_name)
-        out = model.inference(x, rank, subgraph_loader)
+    # model.eval()
+    # if dataset_name == "ogbn-products":
+    #     evaluator = Evaluator(name=dataset_name)
+    #     out = model.inference(x, rank, subgraph_loader)
 
-        y_true = y.cpu()
-        y_pred = out.argmax(dim=-1, keepdim=True)
+    #     y_true = y.cpu()
+    #     y_pred = out.argmax(dim=-1, keepdim=True)
 
-        acc1 = evaluator.eval({
-            'y_true': y_true[train_idx],
-            'y_pred': y_pred[train_idx],
-        })['acc']
-        acc2 = evaluator.eval({
-            'y_true': y_true[valid_idx],
-            'y_pred': y_pred[valid_idx],
-        })['acc']
-        acc3 = evaluator.eval({
-            'y_true': y_true[test_idx],
-            'y_pred': y_pred[test_idx],
-        })['acc']
-        print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
-    elif dataset_name == "papers100M":
-        pass
-    else:
-        with torch.no_grad():
-            out = model.inference(x, rank, subgraph_loader)
-        res = out.argmax(dim=-1) == y.cpu()
-        acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
-        acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
-        acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
-        print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
+    #     acc1 = evaluator.eval({
+    #         'y_true': y_true[train_idx],
+    #         'y_pred': y_pred[train_idx],
+    #     })['acc']
+    #     acc2 = evaluator.eval({
+    #         'y_true': y_true[valid_idx],
+    #         'y_pred': y_pred[valid_idx],
+    #     })['acc']
+    #     acc3 = evaluator.eval({
+    #         'y_true': y_true[test_idx],
+    #         'y_pred': y_pred[test_idx],
+    #     })['acc']
+    #     print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
+    # elif dataset_name == "papers100M":
+    #     pass
+    # else:
+    #     with torch.no_grad():
+    #         out = model.inference(x, rank, subgraph_loader)
+    #     res = out.argmax(dim=-1) == y.cpu()
+    #     acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
+    #     acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
+    #     acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
+    #     print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
     # metric = cal_metrics(epochtimes)
     # log.log(
     #     logging.INFO,

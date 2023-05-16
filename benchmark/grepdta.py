@@ -1,7 +1,7 @@
 import os
 import shutil
 
-root_dir = "./multirun/2023-04-23/"
+root_dir = "./multirun/2023-05-16/"
 # root_dir = "./outputs/2023-04-07/"
 log_file = "./profilelogs/all_logs.csv"
 

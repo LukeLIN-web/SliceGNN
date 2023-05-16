@@ -13,7 +13,7 @@ params:
 
   ogbn-products:
     hop: [10, 10, 10]
-    batch_size: 1024
+    batch_size: 10240
     lr: 0.01
     hidden_channels: 256
 

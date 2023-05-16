@@ -6,11 +6,11 @@ import torch
 from ogb.nodeproppred import Evaluator
 from omegaconf import OmegaConf
 from torch_geometric.loader import NeighborSampler
+from utils import get_model
 
 import quiver
-from microGNN.models import SAGE, criterion
-from microGNN.utils import (cal_metrics, check_memory, get_dataset,
-                            get_nano_batch)
+from microGNN.models import criterion
+from microGNN.utils import cal_metrics, get_dataset, get_nano_batch
 
 log = logging.getLogger(__name__)
 
@@ -66,8 +66,16 @@ def train(conf):
             num_workers=14,
         )
 
-    model = SAGE(data.num_features, conf.hidden_channels, dataset.num_classes,
-                 layers).to(rank)
+    model_params = {
+        'inputs_channels': data.num_features,
+        'hidden_channels': params.hidden_channels,
+        'output_channels': dataset.num_classes,
+        'num_layers': layers,
+    }
+    if conf.model.name == "gat":
+        model_params['num_heads'] = params.heads
+
+    model = get_model(conf.model.name, model_params, scale=False).to(rank)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
     y = data.y
     epochtimes = []
