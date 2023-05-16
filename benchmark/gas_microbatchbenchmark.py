@@ -10,7 +10,7 @@ from utils import get_model
 
 import quiver
 from microGNN import History
-from microGNN.models import ScaleSAGE, criterion
+from microGNN.models import criterion
 from microGNN.utils import cal_metrics, get_dataset, get_nano_batch_histories
 
 log = logging.getLogger(__name__)

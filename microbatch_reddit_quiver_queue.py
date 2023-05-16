@@ -1,48 +1,38 @@
-"""
-sample : quiver
-dataset: reddit
-getnanobatch : yes
-"""
+import logging
 import os
+from timeit import default_timer
 
 import hydra
-from omegaconf import OmegaConf
-
 import torch
-import torch.nn.functional as F
 import torch.multiprocessing as mp
+import torch.nn.functional as F
+from omegaconf import OmegaConf
 from torch.nn.parallel import DistributedDataParallel
-
-from torch_geometric.datasets import Reddit
 from torch_geometric.loader import NeighborSampler
 
 import quiver
-from timeit import default_timer
-from microGNN.utils import get_nano_batch
 from microGNN.models import SAGE
+from microGNN.utils import (cal_metrics, get_dataset, get_nano_batch,
+                            get_nano_batch_histories)
 from microGNN.utils.common_config import gpu
-import logging
 
 log = logging.getLogger(__name__)
 
 
-def run_sample(worker_id, params, dataset, quiver_sampler, nano_queues):
+def run_sample(worker_id, params, conf, data, quiver_sampler, nano_queues):
     sample_workers = [
-        gpu(params.num_train_worker + i) for i in range(params.num_sample_worker)
+        gpu(conf.num_train_worker + i) for i in range(conf.num_sample_worker)
     ]
 
-    num_sample_worker = params.num_sample_worker
-    per_gpu = params.nano_pergpu
+    num_sample_worker = conf.num_sample_worker
+    per_gpu = conf.nano_pergpu
     ctx = sample_workers[worker_id]
     torch.cuda.set_device(ctx)
-    num_train_worker = params.num_train_worker
-    print(
-        "[Sample Worker {:d}/{:d}] Started with PID {:d}({:s})".format(
-            worker_id, num_sample_worker, os.getpid(), torch.cuda.get_device_name(ctx)
-        )
-    )
+    num_train_worker = conf.num_train_worker
+    print("[Sample Worker {:d}/{:d}] Started with PID {:d}({:s})".format(
+        worker_id, num_sample_worker, os.getpid(),
+        torch.cuda.get_device_name(ctx)))
 
-    data = dataset[0]
     train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
 
     train_loader = torch.utils.data.DataLoader(
@@ -52,30 +42,28 @@ def run_sample(worker_id, params, dataset, quiver_sampler, nano_queues):
         drop_last=True,
     )
 
-    torch.manual_seed(12345)
-
-    for epoch in range(1, params.num_epoch + 1):
+    for epoch in range(1, conf.num_epoch + 1):
         epoch_start = default_timer()
         for seeds in train_loader:
             n_id, batch_size, adjs = quiver_sampler.sample(seeds)
-            nano_batchs = get_nano_batch(
-                adjs, n_id, batch_size, num_train_worker * per_gpu
-            )
-            for i in range(num_train_worker):
-                nano_queues[i].put((n_id, nano_batchs[i * per_gpu : (i + 1) * per_gpu]))
+            nano_batchs = get_nano_batch(adjs, n_id, batch_size,
+                                         num_train_worker * per_gpu)
+            # for i in range(num_train_worker):
+            #     nano_queues[i].put((n_id, nano_batchs[i * per_gpu : (i + 1) * per_gpu]))
         epoch_end = default_timer()
-        print(f"Epoch: {epoch:03d}, Sample Epoch Time: {epoch_end - epoch_start}")
+        print(
+            f"Epoch: {epoch:03d}, Sample Epoch Time: {epoch_end - epoch_start}"
+        )
 
 
-def run_train(worker_id, params, x, dataset, queue):
-    train_workers = [gpu(i) for i in range(params.num_train_worker)]
+def run_train(worker_id, params, conf, x, dataset, queue):
+    train_workers = [gpu(i) for i in range(conf.num_train_worker)]
     ctx = train_workers[worker_id]
-    num_worker = params.num_train_worker
+    num_worker = conf.num_train_worker
 
     if num_worker > 1:
         dist_init_method = "tcp://{master_ip}:{master_port}".format(
-            master_ip="127.0.0.1", master_port="12345"
-        )
+            master_ip="127.0.0.1", master_port="12345")
         torch.distributed.init_process_group(
             backend="nccl",
             init_method=dist_init_method,
@@ -85,11 +73,8 @@ def run_train(worker_id, params, x, dataset, queue):
     train_device = torch.device(ctx)
     torch.cuda.set_device(train_device)
 
-    print(
-        "[Train Worker {:d}/{:d}] Started with PID {:d}({:s})".format(
-            worker_id, num_worker, os.getpid(), torch.cuda.get_device_name(ctx)
-        )
-    )
+    print("[Train Worker {:d}/{:d}] Started with PID {:d}({:s})".format(
+        worker_id, num_worker, os.getpid(), torch.cuda.get_device_name(ctx)))
 
     data = dataset[0]
     train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
@@ -105,34 +90,35 @@ def run_train(worker_id, params, x, dataset, queue):
             num_workers=6,
         )
     num_features, num_classes = dataset.num_features, dataset.num_classes
-    torch.manual_seed(12345)
-    model = SAGE(num_features, params.architecture.hidden_channels, num_classes).to(
-        train_device
-    )
+    model = SAGE(num_features, params.hidden_channels,
+                 num_classes).to(train_device)
     if num_worker > 1:
-        model = DistributedDataParallel(
-            model, device_ids=[train_device], output_device=train_device
-        )
+        model = DistributedDataParallel(model,
+                                        device_ids=[train_device],
+                                        output_device=train_device)
     optimizer = torch.optim.Adam(model.parameters(), lr=params.lr)
 
     y = data.y.to(train_device)
     length = train_idx.size(dim=0) // (1024 * num_worker)
 
-    for epoch in range(1, params.num_epoch + 1):
+    for epoch in range(1, conf.num_epoch + 1):
         model.train()
         epoch_start = default_timer()
         for _ in range(length):
             optimizer.zero_grad()
             (n_id, nano_batchs) = queue.get()
-            target_node = n_id[:batch_size][
-                worker_id * params.batch_size : (worker_id + 1) * params.batch_size
-            ]
+            target_node = n_id[:batch_size][worker_id *
+                                            params.batch_size:(worker_id + 1) *
+                                            params.batch_size]
             for i, nano_batch in enumerate(nano_batchs):
-                nano_batch_adjs = [adj.to(train_device) for adj in nano_batch.adjs]
+                nano_batch_adjs = [
+                    adj.to(train_device) for adj in nano_batch.adjs
+                ]
                 out = model(x[n_id][nano_batch.n_id], nano_batch_adjs)
                 loss = F.nll_loss(
                     out,
-                    y[target_node][i * (nano_batch.size) : (i + 1) * (nano_batch.size)],
+                    y[target_node][i * (nano_batch.size):(i + 1) *
+                                   (nano_batch.size)],
                 )
                 loss.backward()
             optimizer.step()
@@ -160,19 +146,22 @@ def run_train(worker_id, params, x, dataset, queue):
 
 @hydra.main(config_path="conf", config_name="config", version_base="1.1")
 def main(conf):
-    params = conf.model.params
+    torch.manual_seed(12345)
+    dataset_name = conf.dataset.name
+    params = conf.model.params[dataset_name]
 
-    num_train_workers = params.num_train_worker
-    num_sample_worker = params.num_sample_worker
+    num_train_workers = conf.num_train_worker
+    num_sample_worker = conf.num_sample_worker
     print(OmegaConf.to_yaml(conf))
 
-    dataset = Reddit("/data/Reddit")
+    dataset_name = conf.dataset.name
+    dataset = get_dataset(dataset_name, conf.root)
     data = dataset[0]
     csr_topo = quiver.CSRTopo(data.edge_index)
 
     quiver_sampler = quiver.pyg.GraphSageSampler(
-        csr_topo, sizes=[25, 10], device=0, mode="GPU"
-    )  # 这里是0, 但是spawn之后会变成fake,然后再lazy init 赋值
+        csr_topo, sizes=[25, 10], device=0,
+        mode="GPU")  # 这里是0, 但是spawn之后会变成fake,然后再lazy init 赋值
 
     quiver_feature = quiver.Feature(
         rank=0,
@@ -189,7 +178,8 @@ def main(conf):
     for worker_id in range(num_sample_worker):
         p = mp.Process(
             target=run_sample,
-            args=(worker_id, params, dataset, quiver_sampler, nanobatchs_qs),
+            args=(worker_id, params, conf, data, quiver_sampler,
+                  nanobatchs_qs),
         )
         p.start()
         workers.append(p)
@@ -200,6 +190,7 @@ def main(conf):
             args=(
                 worker_id,
                 params,
+                conf,
                 quiver_feature,
                 dataset,
                 nanobatchs_qs[worker_id],
