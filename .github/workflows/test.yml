@@ -6,7 +6,7 @@ jobs:
   container-test-job:
     runs-on: ubuntu-latest
     container:
-      image: 1263810658/pyg2.1-torch1.10-cuda11.3
+      image: 1263810658/pytorch-geometric:pyg2.3-torch1.13-cu116
       env:
         NODE_ENV: development
       ports:
