@@ -67,7 +67,7 @@ def slice_adj(
     node_mask[node_idx] = True
     torch.index_select(node_mask, 0, target, out=edge_mask)  # select edge
     subsets = [node_idx, source[edge_mask]]
-    # remove all target nodes from array.
+    # remove all target nodes from subsets[1].
     # subsets[0] is the target nodes , and we need place it at first.
     mask = torch.isin(subsets[1], subsets[0])
     subsets[1] = subsets[1][~mask]
