@@ -33,7 +33,7 @@ jobs:
 
       - name: Install main package
         run: |
-          pip install -e .
+          pip install .
 
       - name: test
         run: |
