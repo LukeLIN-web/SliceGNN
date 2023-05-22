@@ -6,7 +6,7 @@ num_sample_worker: 1
 
 
 defaults:
-  - dataset: reddit
+  - dataset: ogbn-products
   - model: gat
 
 root: "/data/ogb"

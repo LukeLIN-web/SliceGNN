@@ -52,7 +52,7 @@ def train(conf):
     feature = torch.zeros(data.x.shape)
     feature[:] = data.x
     x.from_cpu_tensor(feature)
-    y = data.y
+    y = data.y.to(rank)
 
     if dataset_name == "ogbn-products" or dataset_name == "papers100M":
         split_idx = dataset.get_idx_split()
@@ -69,38 +69,47 @@ def train(conf):
                                                num_workers=14,
                                                shuffle=False,
                                                drop_last=True)
-    # if dataset_name != "papers100M":
-    #     subgraph_loader = NeighborSampler(
-    #         data.edge_index,
-    #         node_idx=None,
-    #         sizes=[-1],
-    #         batch_size=1024,
-    #         shuffle=False,
-    #         num_workers=14,
-    #     )
+    if dataset_name != "papers100M":
+        subgraph_loader = NeighborSampler(
+            data.edge_index,
+            node_idx=None,
+            sizes=[-1],
+            batch_size=1024,
+            shuffle=False,
+            num_workers=14,
+        )
     optimizer = torch.optim.Adam(model.parameters(), lr=params.lr)
     epochtimes = []
-    acc3 = -1
+
     for epoch in range(1, conf.num_epoch + 1):
         model.train()
-        epoch_start = default_timer()
+        samplertimes = []
+        traintimes = []
         for seeds in train_loader:
-            optimizer.zero_grad()
+            epoch_start = default_timer()
             n_id, batch_size, adjs = quiver_sampler.sample(seeds)
+            sampletime = default_timer()
+            optimizer.zero_grad()
             target_node = n_id[:batch_size]
             adjs = [adj.to(rank) for adj in adjs]
             out = model(x[n_id].to(rank), adjs)
             loss = criterion(
                 out,
-                y[target_node].to(rank),
+                y[target_node],
                 dataset_name,
             )
             loss.backward()
             optimizer.step()
-        epochtime = default_timer() - epoch_start
+            traintime = default_timer()
+            samplertimes.append(sampletime - epoch_start)
+            traintimes.append(traintime - sampletime)  # train时间是sampler两倍.
+        epoch_end = default_timer()
         if epoch > 1:
-            epochtimes.append(epochtime)
-        print(f"Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {epochtime}")
+            epochtimes.append(epoch_end - epoch_start)
+        # print(f"Epoch: {epoch:03d}, Time: {epoch_end - epoch_start:.4f}")
+        print(
+            f"Epoch: {epoch:03d}, Loss: {loss:.4f}, sampler Time: {sum(samplertimes):.4f}, Train Time: {sum(traintimes):.4f}"
+        )
     maxgpu = torch.cuda.max_memory_allocated() / 10**9
     print(f"max gpu memory {maxgpu:.2f} GB")
     metric = cal_metrics(epochtimes)
@@ -108,44 +117,6 @@ def train(conf):
         logging.INFO,
         f',origin,{dataset_name},{gpu_num * per_gpu},{layers},{metric["mean"]:.2f},{params.batch_size} ,{maxgpu:.2f}',
     )
-
-    # model.eval()
-    # if dataset_name == "ogbn-products":
-    #     evaluator = Evaluator(name=dataset_name)
-    #     out = model.inference(x, rank, subgraph_loader)
-
-    #     y_true = y.cpu()
-    #     y_pred = out.argmax(dim=-1, keepdim=True)
-
-    #     acc1 = evaluator.eval({
-    #         'y_true': y_true[train_idx],
-    #         'y_pred': y_pred[train_idx],
-    #     })['acc']
-    #     acc2 = evaluator.eval({
-    #         'y_true': y_true[valid_idx],
-    #         'y_pred': y_pred[valid_idx],
-    #     })['acc']
-    #     acc3 = evaluator.eval({
-    #         'y_true': y_true[test_idx],
-    #         'y_pred': y_pred[test_idx],
-    #     })['acc']
-    #     print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
-    # elif dataset_name == "papers100M":
-    #     pass
-    # else:
-    #     with torch.no_grad():
-    #         out = model.inference(x, rank, subgraph_loader).cpu()
-    #     res = out.argmax(dim=-1) == y.cpu()
-    #     acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
-    #     acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
-    #     acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
-    #     print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
-
-    # metric = cal_metrics(epochtimes)
-    # log.log(
-    #     logging.INFO,
-    #     f',origin,{dataset_name},{gpu_num * per_gpu},{layers},{metric["mean"]:.2f}, {maxgpu:.2f}, {acc3:.4f}',
-    # )
 
 
 if __name__ == "__main__":

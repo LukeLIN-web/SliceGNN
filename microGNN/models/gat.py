@@ -108,7 +108,7 @@ class ScaleGAT(torch.nn.Module):
 
     def forward(self, x: Tensor, n_id: Tensor, adjs: List,
                 histories: torch.nn.ModuleList):
-        pruned_adjs = prune_computation_graph(n_id, adjs, histories)
+        pruned_adjs = prune_computation_graph(n_id, adjs, histories)  # 12%用时
         for i, adj in enumerate(pruned_adjs):
             batch_size = adjs[i].size[1]  # original batch size
             x_target = x[:batch_size]  # Target nodes are always placed first.

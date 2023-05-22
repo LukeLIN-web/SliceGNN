@@ -12,8 +12,7 @@ from torch_geometric.loader import NeighborSampler
 
 import quiver
 from microGNN.models import SAGE
-from microGNN.utils import (cal_metrics, get_dataset, get_nano_batch,
-                            get_nano_batch_histories)
+from microGNN.utils import cal_metrics, get_dataset, get_nano_batch
 from microGNN.utils.common_config import gpu
 
 log = logging.getLogger(__name__)
@@ -29,9 +28,9 @@ def run_sample(worker_id, params, conf, data, quiver_sampler, nano_queues):
     ctx = sample_workers[worker_id]
     torch.cuda.set_device(ctx)
     num_train_worker = conf.num_train_worker
-    print("[Sample Worker {:d}/{:d}] Started with PID {:d}({:s})".format(
-        worker_id, num_sample_worker, os.getpid(),
-        torch.cuda.get_device_name(ctx)))
+    print(
+        f"[Sample Worker {worker_id}/{num_sample_worker}] Started with PID {os.getpid()}({torch.cuda.get_device_name(ctx)})"
+    )
 
     train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
 
@@ -41,19 +40,25 @@ def run_sample(worker_id, params, conf, data, quiver_sampler, nano_queues):
         shuffle=False,
         drop_last=True,
     )
-
+    epochtimes = []
     for epoch in range(1, conf.num_epoch + 1):
         epoch_start = default_timer()
         for seeds in train_loader:
             n_id, batch_size, adjs = quiver_sampler.sample(seeds)
             nano_batchs = get_nano_batch(adjs, n_id, batch_size,
                                          num_train_worker * per_gpu)
-            # for i in range(num_train_worker):
-            #     nano_queues[i].put((n_id, nano_batchs[i * per_gpu : (i + 1) * per_gpu]))
+            for i in range(num_train_worker):
+                nano_queues[i].put(
+                    (n_id, nano_batchs[i * per_gpu:(i + 1) * per_gpu]))
         epoch_end = default_timer()
-        print(
-            f"Epoch: {epoch:03d}, Sample Epoch Time: {epoch_end - epoch_start}"
-        )
+        epochtime = epoch_end - epoch_start
+        if epoch > 1:
+            epochtimes.append(epochtime)
+        print(f"Epoch: {epoch:03d}, Sample Epoch Time: {epochtime}")
+    metric = cal_metrics(epochtimes)
+    print(
+        f'sample finished + {conf.model.name},{metric["mean"]:.2f},{params.batch_size}'
+    )
 
 
 def run_train(worker_id, params, conf, x, dataset, queue):
@@ -73,8 +78,9 @@ def run_train(worker_id, params, conf, x, dataset, queue):
     train_device = torch.device(ctx)
     torch.cuda.set_device(train_device)
 
-    print("[Train Worker {:d}/{:d}] Started with PID {:d}({:s})".format(
-        worker_id, num_worker, os.getpid(), torch.cuda.get_device_name(ctx)))
+    print(
+        f"[Train Worker { worker_id}/{num_worker}] Started with PID {os.getpid()}({torch.cuda.get_device_name(ctx)})"
+    )
 
     data = dataset[0]
     train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
@@ -100,13 +106,14 @@ def run_train(worker_id, params, conf, x, dataset, queue):
 
     y = data.y.to(train_device)
     length = train_idx.size(dim=0) // (1024 * num_worker)
-
+    epochtimes = []
     for epoch in range(1, conf.num_epoch + 1):
         model.train()
-        epoch_start = default_timer()
+        itetime = []
         for _ in range(length):
-            optimizer.zero_grad()
             (n_id, nano_batchs) = queue.get()
+            epoch_start = default_timer()
+            optimizer.zero_grad()
             target_node = n_id[:batch_size][worker_id *
                                             params.batch_size:(worker_id + 1) *
                                             params.batch_size]
@@ -122,29 +129,37 @@ def run_train(worker_id, params, conf, x, dataset, queue):
                 )
                 loss.backward()
             optimizer.step()
-        epoch_end = default_timer()
+            epoch_end = default_timer()
+            itetime.append(epoch_end - epoch_start)
+        if epoch > 1:
+            epochtimes.append(sum(itetime))
 
         if worker_id == 0:
             print(
-                f"Epoch: {epoch:03d}, Loss: {loss:.4f}, Train Epoch Time: {epoch_end - epoch_start}"
+                f"Epoch: {epoch:03d}, Loss: {loss:.4f}, Train Epoch Time: {sum(itetime)}"
             )
 
-        if worker_id == 0 and epoch % 5 == 0:  # We evaluate on a single GPU for now
-            model.eval()
-            with torch.no_grad():
-                if num_worker > 1:
-                    out = model.module.inference(x, worker_id, subgraph_loader)
-                else:
-                    out = model.inference(x, worker_id, subgraph_loader)
-            res = out.argmax(dim=-1) == y
-            acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
-            assert acc1 > 0.90, "Sanity check , Low training accuracy."
-            acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
-            acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
-            print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
+    metric = cal_metrics(epochtimes)
+    print(
+        f'train finished + {conf.model.name},{metric["mean"]:.2f},{params.batch_size}'
+    )
+
+    # if worker_id == 0:
+    #     model.eval()
+    #     with torch.no_grad():
+    #         if num_worker > 1:
+    #             out = model.module.inference(x, worker_id, subgraph_loader)
+    #         else:
+    #             out = model.inference(x, worker_id, subgraph_loader)
+    #     res = out.argmax(dim=-1) == y
+    #     acc1 = int(res[data.train_mask].sum()) / int(data.train_mask.sum())
+    #     assert acc1 > 0.90, "Sanity check , Low training accuracy."
+    #     acc2 = int(res[data.val_mask].sum()) / int(data.val_mask.sum())
+    #     acc3 = int(res[data.test_mask].sum()) / int(data.test_mask.sum())
+    #     print(f"Train: {acc1:.4f}, Val: {acc2:.4f}, Test: {acc3:.4f}")
 
 
-@hydra.main(config_path="conf", config_name="config", version_base="1.1")
+@hydra.main(config_path="../conf", config_name="config", version_base="1.1")
 def main(conf):
     torch.manual_seed(12345)
     dataset_name = conf.dataset.name

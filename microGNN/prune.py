@@ -19,7 +19,7 @@ def prune_computation_graph(n_id: Tensor, nb_adjs: List,
         adj = adjs[i]
         layer_idx = torch.arange(len(layernode))  # nano batch id
         cached_nodes_mask = histories[i - 1].cached_nodes[[layernode]]
-        sub_nid = layer_idx[~cached_nodes_mask]
+        sub_nid = layer_idx[~cached_nodes_mask]  # 7%的用时
         layernode, sub_adjs, _ = slice_adj(sub_nid,
                                            adj.edge_index,
                                            relabel_nodes=False)
