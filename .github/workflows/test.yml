@@ -33,6 +33,7 @@ jobs:
 
       - name: Install main package
         run: |
+          pip install torch-quiver
           pip install .
 
       - name: test
