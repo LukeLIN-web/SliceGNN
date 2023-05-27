@@ -39,10 +39,6 @@ def test_sageacc():
     torch.manual_seed(12345)
     num_layers = 2
     hidden_channels = 256
-    # model = ScaleSAGE(in_channels=data.num_features,
-    #                   hidden_channels=hidden_channels,
-    #                   out_channels=dataset.num_classes,
-    #                   num_layers=num_layers).to(device)
     model = SAGE(in_channels=data.num_features,
                  hidden_channels=hidden_channels,
                  out_channels=dataset.num_classes,
@@ -57,10 +53,6 @@ def test_sageacc():
             n_id, batch_size, adjs = quiver_sampler.sample(seeds)
             target_node = n_id[:batch_size]
             nano_batchs = get_nano_batch(adjs, n_id, batch_size, 2)
-            # histories = torch.nn.ModuleList([
-            #     History(len(n_id), hidden_channels, device)
-            #     for _ in range(num_layers - 1)
-            # ])
             for i, nb in enumerate(nano_batchs):
                 adjs = [adj.to(device) for adj in nb.adjs]
                 nbid = nb.n_id.to(device)
@@ -123,7 +115,6 @@ def test_acc():
                 History(cacheid, len(n_id), hidden_channels, device)
                 for cacheid in cached_id
             ])
-            # print(torch.cuda.max_memory_allocated() / 10**6)
             for i, nb in enumerate(nano_batchs):
                 adjs = [adj.to(device) for adj in nb.adjs]
                 nbid = nb.n_id.to(device)

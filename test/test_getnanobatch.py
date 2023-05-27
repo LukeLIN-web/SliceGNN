@@ -105,11 +105,10 @@ def test_cache_id():
     nano_batchs, cached_id = get_nano_batch_histories(adjs,
                                                       mb_n_id,
                                                       batch_size=2,
-                                                      node_num=node_num,
                                                       num_nano_batch=2,
                                                       relabel_nodes=True)
     assert len(cached_id) == 1
-    assert cached_id[0] == [torch.tensor(3)]
+    assert cached_id[0] == torch.tensor(3)
 
 
 def test_mapping():

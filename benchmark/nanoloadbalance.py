@@ -18,61 +18,79 @@ log = logging.getLogger(__name__)
 from enum import Enum
 
 
-class TrainerType(Enum):
-    Trainer = 1
-    Switcher = 2
-
-
-def run_sample(worker_id, run_config, quiver_sampler):
-    conf = run_config['conf']
+def get_global_model(run_config):
     params = run_config['params']
-    sample_workers = [
-        gpu(conf.num_train_worker + i) for i in range(conf.num_sample_worker)
-    ]
-    num_sample_worker = conf.num_sample_worker
-    per_gpu = conf.nano_pergpu
-    ctx = sample_workers[worker_id]
-    torch.cuda.set_device(ctx)
-    data = run_config['dataset'][0]
-    nano_queues = run_config['queue']
-    num_train_worker = conf.num_train_worker
-    print(
-        f"[Sample Worker {worker_id}/{num_sample_worker}] Started with PID {os.getpid()}({torch.cuda.get_device_name(ctx)})"
-    )
-    sampler_stop_event = run_config['sampler_stop_event'][worker_id]
-
-    train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
-
-    train_loader = torch.utils.data.DataLoader(
-        train_idx,
-        batch_size=params.batch_size * num_train_worker,
-        shuffle=False,
-        drop_last=True,
-    )
-
-    epochtimes = []
-    for epoch in range(1, conf.num_epoch + 1):
-        sampler_stop_event.clear()
-        for seeds in train_loader:
-            n_id, batch_size, adjs = quiver_sampler.sample(seeds)
-            nano_batchs = get_nano_batch(adjs, n_id, batch_size,
-                                         num_train_worker * per_gpu)
-            for i in range(num_train_worker):
-                nano_queues[i].put(
-                    (n_id, nano_batchs[i * per_gpu:(i + 1) * per_gpu]))
-        sampler_stop_event.set()
-        print(f"Epoch: {epoch:03d}")
-    metric = cal_metrics(epochtimes)
-    print(
-        f'sample finished + {conf.model.name},{metric["mean"]:.2f},{params.batch_size}'
-    )
+    dataset = run_config['dataset']
+    num_features, num_classes = dataset.num_features, dataset.num_classes
+    model = SAGE(num_features, params.hidden_channels, num_classes)
+    model.share_memory(
+    )  # gradients are allocated lazily, so they are not shared here
+    return model
 
 
 def get_run_config(conf, params):
     run_config = {}
     run_config['conf'] = conf
     run_config['params'] = params
+    run_config['train_workers'] = [
+        gpu(i) for i in range(conf.num_train_worker)
+    ]
+    run_config['sample_workers'] = [
+        gpu(conf.num_train_worker + i) for i in range(conf.num_sample_worker)
+    ]
+    run_config['queue'] = mp.Queue(maxsize=conf.queue_size)
+    run_config['ratio'] = 3
     return run_config
+
+
+def run_sample(worker_id, run_config, quiver_sampler):
+    conf = run_config['conf']
+    params = run_config['params']
+    ratio = run_config['ratio']
+    torch.cuda.set_device(ctx)
+    data = run_config['dataset'][0]
+    nano_queues = run_config['queue']
+    num_nano = conf.num_sample_worker + ratio * conf.num_train_worker
+    mq_sem = run_config['mq_sem']
+    sampler_stop_event = run_config['sampler_stop_event'][worker_id]
+    ctx = run_config['sample_workers'][worker_id]
+
+    print('[Sample Worker {:d}/{:d}] Started with PID {:d} Device {:s}'.format(
+        worker_id, conf.num_sample_worker, os.getpid(), ctx))
+
+    train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
+
+    train_loader = torch.utils.data.DataLoader(
+        train_idx,
+        batch_size=params.batch_size * num_nano,
+        shuffle=False,
+        drop_last=True,
+    )
+
+    epochtimes = []
+    for epoch in range(1, conf.num_epoch + 1):
+        tic = default_timer()
+        sampler_stop_event.clear()
+        for seeds in train_loader:
+            mq_sem.release()
+            n_id, batch_size, adjs = quiver_sampler.sample(seeds)
+            nano_batchs = get_nano_batch(adjs, n_id, batch_size, num_nano)
+            nano_queues.put((n_id, nano_batchs))
+        sampler_stop_event.set()
+        toc = default_timer()
+        epochtimes.append(toc - tic)
+        # Get the current number of elements in the queue
+        num_elements = nano_queues.qsize()
+        print("Number of elements in the queue:", num_elements)
+    metric = cal_metrics(epochtimes)
+    print(
+        f'sample finished. {conf.model.name},{metric["mean"]:.2f},{params.batch_size}'
+    )
+
+
+class TrainerType(Enum):
+    Trainer = 1
+    Switcher = 2
 
 
 def run_train(worker_id, run_config, x, trainer_type):
@@ -80,54 +98,61 @@ def run_train(worker_id, run_config, x, trainer_type):
     params = run_config['params']
     num_worker = conf.num_train_worker
     dataset = run_config['dataset']
-    queue = run_config['queue'][worker_id]
+    queue = run_config['queue']
 
-    if (trainer_type == TrainerType.Switcher):
+    ctx = None
+    if (trainer_type == TrainerType.Trainer):
+        ctx = run_config['train_workers'][worker_id]
+    elif (trainer_type == TrainerType.Switcher):
+        ctx = run_config['sample_workers'][worker_id]
         sampler_stop_event = run_config['sampler_stop_event'][worker_id]
-        train_device = torch.device("cuda:0")
-    else:
-        train_device = torch.device("cuda:1")
+    global_cpu_model = run_config['global_cpu_model']
 
+    mq_sem = run_config['mq_sem']
+    train_device = torch.device(ctx)
     torch.cuda.set_device(train_device)
     print(
-        f"[Train Worker { worker_id}/{num_worker}] Started with PID {os.getpid()}({train_device})"
-    )
+        '[{:10s} Worker  {:d}/{:d}] Started with PID {:d} Train Device '.
+        format(
+            trainer_type.name, worker_id,
+            run_config['num_train_worker'] + run_config['num_sample_worker'],
+            os.getpid()), train_device)
 
-    if num_worker > 1:
-        dist_init_method = "tcp://{master_ip}:{master_port}".format(
-            master_ip="127.0.0.1", master_port="12345")
-        torch.distributed.init_process_group(
-            backend="nccl",
-            init_method=dist_init_method,
-            world_size=num_worker,
-            rank=worker_id,
-        )
-
-    data = dataset[0]
-    train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
-    batch_size = params.batch_size * num_worker
-
-    if worker_id == 0:
-        subgraph_loader = NeighborSampler(
-            data.edge_index,
-            node_idx=None,
-            sizes=[-1],
-            batch_size=2048,
-            shuffle=False,
-            num_workers=6,
-        )
     num_features, num_classes = dataset.num_features, dataset.num_classes
-    model = SAGE(num_features, params.hidden_channels,
-                 num_classes).to(train_device)
+    model = SAGE(num_features, params.hidden_channels, num_classes)
+    for (param, cpu_param) in zip(model.parameters(),
+                                  global_cpu_model.parameters()):
+        param.data = cpu_param.data.clone()
+    model = model.to(train_device)
+    model_copy = SAGE(num_features, params.hidden_channels, num_classes)
+    for (param, cpu_param) in zip(model_copy.parameters(),
+                                  global_cpu_model.parameters()):
+        param.data = cpu_param.data.clone()
+    model_copy = model_copy.to(train_device)
+
     optimizer = torch.optim.Adam(model.parameters(), lr=params.lr)
 
+    data = dataset[0]
+    batch_size = params.batch_size * num_worker
+
+    model.train()
+    model_copy.train()
+
+    # if worker_id == 0:
+    #     subgraph_loader = NeighborSampler(
+    #         data.edge_index,
+    #         node_idx=None,
+    #         sizes=[-1],
+    #         batch_size=2048,
+    #         shuffle=False,
+    #         num_workers=6,
+    #     )
+
     y = data.y.to(train_device)
-    length = train_idx.size(dim=0) // (1024 * num_worker)
     epochtimes = []
     for epoch in range(1, conf.num_epoch + 1):
         model.train()
-        itetime = []
-        for _ in range(length):
+        while mq_sem.acquire(timeout=0.01):
             (n_id, nano_batchs) = queue.get()
             epoch_start = default_timer()
             optimizer.zero_grad()
@@ -145,21 +170,9 @@ def run_train(worker_id, run_config, x, trainer_type):
                                    (nano_batch.size)],
                 )
                 loss.backward()
-            # Synchronize gradients across all processes
-            for param in model.parameters():
-                torch.distributed.all_reduce(param.grad.data,
-                                             op=torch.distributed.ReduceOp.SUM)
 
             optimizer.step()
             epoch_end = default_timer()
-            itetime.append(epoch_end - epoch_start)
-        if epoch > 1:
-            epochtimes.append(sum(itetime))
-
-        if worker_id == 0:
-            print(
-                f"Epoch: {epoch:03d}, Loss: {loss:.4f}, Train Epoch Time: {sum(itetime)}"
-            )
 
     metric = cal_metrics(epochtimes)
     print(
@@ -197,7 +210,8 @@ def main(conf):
     data = dataset[0]
     run_config['dataset'] = dataset
     csr_topo = quiver.CSRTopo(data.edge_index)
-
+    run_config['global_cpu_model'] = get_global_model(run_config)
+    run_config['mq_sem'] = mp.Semaphore(0)
     quiver_sampler = quiver.pyg.GraphSageSampler(
         csr_topo, sizes=[25, 10], device=0,
         mode="GPU")  # 这里是0, 但是spawn之后会变成fake,然后再lazy init 赋值
@@ -217,11 +231,7 @@ def main(conf):
     run_config['sampler_stop_event'] = []
     for woker_id in range(num_sample_worker):
         run_config['sampler_stop_event'].append(mp.Event())
-    print(mp.get_start_method())
-    mp.set_start_method("spawn")
 
-    run_config['queue'] = [mp.Queue(30) for i in range(num_train_workers)]
-    print(run_config)
     for worker_id in range(num_sample_worker):
         p = mp.Process(
             target=run_sample,
@@ -231,8 +241,8 @@ def main(conf):
         workers.append(p)
         # sampler switcher
         p = mp.Process(target=run_train,
-                       args=(worker_id, run_config,
-                             TrainerType.Switcher))  #为什么这样可以实现转换?
+                       args=(worker_id, run_config, quiver_feature,
+                             TrainerType.Switcher))
         p.start()
         workers.append(p)
 
@@ -249,4 +259,5 @@ def main(conf):
 
 
 if __name__ == "__main__":
+    mp.set_start_method("spawn")
     main()

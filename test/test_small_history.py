@@ -107,7 +107,7 @@ def test_gradient(device):
     histories = torch.nn.ModuleList([
         History(cacheid, node_num, hidden_channels, device)
         for cacheid in cached_id
-    ])
+    ]).to(device)
     nb = nano_batchs[0]
     adjs = [adj.to(device) for adj in nb.adjs]
     x = torch.tensor(features, dtype=torch.float).to(device)
@@ -190,10 +190,7 @@ def test_small_histfunction():
     histories[0].cached_nodes = torch.tensor(
         [False, False, False, True, False, False, False, False])
     histories[0].emb[0] = torch.tensor([3.3, 3.4, 3.5, 3.6])  # should be pull
-
-    pruned_adjs, pruned_nodes = prune_computation_graph(
-        nb.n_id, nb.adjs, histories)
-
+    pruned_adjs = prune_computation_graph(nb.n_id, nb.adjs, histories)
     for i, adj in enumerate(pruned_adjs):
         batch_size = nb.adjs[i].size[1]
         x_target = x[:batch_size]  # require 前size[0]个节点是 layer nodes
@@ -202,10 +199,10 @@ def test_small_histfunction():
         if i != num_layers - 1:  # last layer is not saved
             history = histories[i]
             assert torch.equal(x[1], torch.zeros(4))
-            x = history.pull(x, pruned_nodes[i + 1])
+            x = history.pull(x, nb.n_id[:batch_size])
             assert not torch.equal(x[0], torch.tensor([3.3, 3.4, 3.5, 3.6]))
             assert torch.equal(x[1], torch.tensor([3.3, 3.4, 3.5, 3.6]))
-            history.push(x, pruned_nodes[i + 1])
+            history.push(x, nb.n_id[:batch_size])
     loss = F.nll_loss(x, torch.tensor([1]))
     loss.backward()
     for param in convs.parameters():
@@ -238,8 +235,7 @@ def test_small_pull():
     histories[0].emb[0] = torch.tensor([3.3, 3.4, 3.5, 3.6])  # should be pull
 
     nb = nano_batchs[1]
-    pruned_adjs, pruned_nodes = prune_computation_graph(
-        nb.n_id, nb.adjs, histories)
+    pruned_adjs = prune_computation_graph(nb.n_id, nb.adjs, histories)
 
     x = torch.tensor(features, dtype=torch.float)
     x = x[mb_n_id][nb.n_id]
@@ -289,8 +285,7 @@ def test_small_push():
         for cacheid in cached_id
     ])
     nb = nano_batchs[1]
-    pruned_adjs, pruned_nodes = prune_computation_graph(
-        nb.n_id, nb.adjs, histories)
+    pruned_adjs = prune_computation_graph(nb.n_id, nb.adjs, histories)
     x = torch.tensor(features, dtype=torch.float)
     x = x[mb_n_id][nb.n_id]
 
