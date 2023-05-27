@@ -31,7 +31,6 @@ def test_forward():
     nano_batchs, cached_id = get_nano_batch_histories(adjs,
                                                       mb_n_id,
                                                       batch_size=2,
-                                                      node_num=node_num,
                                                       num_nano_batch=2,
                                                       relabel_nodes=True)
     histories = torch.nn.ModuleList([
@@ -43,8 +42,7 @@ def test_forward():
     x = torch.tensor(features, dtype=torch.float)
     nb = nano_batchs[0]
     x = x[mb_n_id][nb.n_id]
-    pruned_adjs, layernodes = prune_computation_graph(nb.n_id, nb.adjs,
-                                                      histories)
+    pruned_adjs = prune_computation_graph(nb.n_id, nb.adjs, histories)
 
     for i, adj in enumerate(pruned_adjs):
         batch_size = nb.adjs[i].size[1]
@@ -55,8 +53,7 @@ def test_forward():
             assert torch.equal(x[2], torch.zeros(4))
 
     nb = nano_batchs[1]
-    pruned_adjs, layernodes = prune_computation_graph(nb.n_id, nb.adjs,
-                                                      histories)
+    pruned_adjs = prune_computation_graph(nb.n_id, nb.adjs, histories)
     x = torch.tensor(features, dtype=torch.float)
     x = x[mb_n_id][nb.n_id]
     for i, adj in enumerate(pruned_adjs):
@@ -79,7 +76,6 @@ def test_prune_computatition_graph():
     nano_batchs, cached_id = get_nano_batch_histories(adjs,
                                                       mb_n_id,
                                                       batch_size=2,
-                                                      node_num=node_num,
                                                       num_nano_batch=2,
                                                       relabel_nodes=True)
     histories = torch.nn.ModuleList([
@@ -90,19 +86,11 @@ def test_prune_computatition_graph():
         [False, False, False, True, False, False, False, False])
 
     nb = nano_batchs[0]
-    pruned_adjs, layernodes = prune_computation_graph(nb.n_id, nb.adjs,
-                                                      histories)
+    pruned_adjs = prune_computation_graph(nb.n_id, nb.adjs, histories)
     assert pruned_adjs[0].edge_index.tolist() == [[1, 2, 3], [0, 0, 1]]
     assert pruned_adjs[1].edge_index.tolist() == [[1, 2], [0, 0]]
-    assert len(layernodes) == 2
-    assert layernodes[0].tolist() == [0, 2, 3, 5]
-    assert layernodes[1].tolist() == [0, 2, 3]
 
     nb = nano_batchs[1]
-    pruned_adjs, layernodes = prune_computation_graph(nb.n_id, nb.adjs,
-                                                      histories)
+    pruned_adjs = prune_computation_graph(nb.n_id, nb.adjs, histories)
     assert pruned_adjs[0].edge_index.tolist() == [[1, 2, 4], [0, 0, 2]]
     assert pruned_adjs[1].edge_index.tolist() == [[1, 2], [0, 0]]
-    assert len(layernodes) == 2
-    assert layernodes[0].tolist() == [1, 4, 3, 7]
-    assert layernodes[1].tolist() == [1, 3, 4]
