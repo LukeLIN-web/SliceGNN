@@ -12,6 +12,8 @@ from microGNN.models import SAGE, ScaleSAGE
 from microGNN.utils import (get_dataset, get_nano_batch,
                             get_nano_batch_histories)
 
+device = torch.device("cuda:0")
+
 
 @onlyCUDA
 def test_sageacc():
@@ -35,8 +37,7 @@ def test_sageacc():
         shuffle=False,
         num_workers=6,
     )
-    device = torch.device("cuda:0")
-    torch.manual_seed(12345)
+
     num_layers = 2
     hidden_channels = 256
     model = SAGE(in_channels=data.num_features,
@@ -46,7 +47,6 @@ def test_sageacc():
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
     x, y = data.x.to(device), data.y.to(device)
     model.train()
-    epoch_start = default_timer()
     for seeds in train_loader:
         n_id, batch_size, adjs = quiver_sampler.sample(seeds)
         target_node = n_id[:batch_size]
@@ -59,7 +59,6 @@ def test_sageacc():
             loss.backward()
         optimizer.step()
         optimizer.zero_grad()
-    print(f"Loss: {loss:.4f}, Epoch Time: {default_timer() - epoch_start}")
 
     model.eval()
     with torch.no_grad():
@@ -72,53 +71,47 @@ def test_sageacc():
     assert acc1 > 0.94, "Sanity check , Low training accuracy."
 
 
-# @onlyCUDA
-# def test_acc():
-#     dataset = get_dataset("reddit", "/data/")
-#     data = dataset[0]
-#     csr_topo = quiver.CSRTopo(data.edge_index)
-#     quiver_sampler = quiver.pyg.GraphSageSampler(csr_topo,
-#                                                  sizes=[10, 5, 5],
-#                                                  device=1,
-#                                                  mode="GPU")
-#     train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
-#     train_loader = torch.utils.data.DataLoader(train_idx,
-#                                                batch_size=1024,
-#                                                shuffle=False,
-#                                                drop_last=True)
-#     device = torch.device("cuda:1")
-#     torch.manual_seed(12345)
-#     num_layers = 3
-#     hidden_channels = 256
-#     model = ScaleSAGE(in_channels=data.num_features,
-#                       hidden_channels=hidden_channels,
-#                       out_channels=dataset.num_classes,
-#                       num_layers=num_layers).to(device)
-#     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-#     x, y = data.x.to(device), data.y.to(device)
-#     model.train()
-#     epoch_start = default_timer()
-#     for seeds in train_loader:
-#         n_id, batch_size, adjs = quiver_sampler.sample(seeds)
-#         target_node = n_id[:batch_size]
-#         nano_batchs, cached_id = get_nano_batch_histories(
-#             adjs, n_id, batch_size)
-#         histories = torch.nn.ModuleList([
-#             History(cacheid, len(n_id), hidden_channels, device)
-#             for cacheid in cached_id
-#         ])
-#         for i, nb in enumerate(nano_batchs):
-#             adjs = [adj.to(device) for adj in nb.adjs]
-#             nbid = nb.n_id.to(device)
-#             out = model(x[n_id][nb.n_id], nbid, adjs, histories)
-#             loss = F.nll_loss(
-#                 out, y[target_node][i * (nb.size):(i + 1) * (nb.size)])
-#             loss.backward()
-#         optimizer.step()
-#         optimizer.zero_grad()
-#     print(
-#         f" Loss: {loss:.4f}, Epoch Time: {default_timer() - epoch_start}"
-#     )
+@onlyCUDA
+def test_acc():
+    dataset = get_dataset("reddit", "/data/")
+    data = dataset[0]
+    csr_topo = quiver.CSRTopo(data.edge_index)
+    quiver_sampler = quiver.pyg.GraphSageSampler(csr_topo,
+                                                 sizes=[10, 5, 5],
+                                                 device=0,
+                                                 mode="GPU")
+    train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
+    train_loader = torch.utils.data.DataLoader(train_idx,
+                                               batch_size=1024,
+                                               shuffle=False,
+                                               drop_last=True)
+    num_layers = 3
+    hidden_channels = 256
+    model = ScaleSAGE(in_channels=data.num_features,
+                      hidden_channels=hidden_channels,
+                      out_channels=dataset.num_classes,
+                      num_layers=num_layers).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    x, y = data.x.to(device), data.y.to(device)
+    model.train()
+    for seeds in train_loader:
+        n_id, batch_size, adjs = quiver_sampler.sample(seeds)
+        target_node = n_id[:batch_size]
+        nano_batchs, cached_id = get_nano_batch_histories(
+            adjs, n_id, batch_size)
+        histories = torch.nn.ModuleList([
+            History(cacheid, len(n_id), hidden_channels, device)
+            for cacheid in cached_id
+        ])
+        for i, nb in enumerate(nano_batchs):
+            adjs = [adj.to(device) for adj in nb.adjs]
+            nbid = nb.n_id.to(device)
+            out = model(x[n_id][nb.n_id], nbid, adjs, histories)
+            loss = F.nll_loss(
+                out, y[target_node][i * (nb.size):(i + 1) * (nb.size)])
+            loss.backward()
+        optimizer.step()
+        optimizer.zero_grad()
 
 
 @withCUDA
@@ -140,7 +133,6 @@ def test_real_dataset(device):
         shuffle=False,
         num_workers=6,
     )
-    torch.manual_seed(12345)
     num_layers = 2
     hidden_channels = 16
     model = ScaleSAGE(in_channels=data.num_features,
