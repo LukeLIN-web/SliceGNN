@@ -40,8 +40,7 @@ def test_same_out(device):
     nano_batchs, cached_id = get_nano_batch_histories(adjs,
                                                       mb_n_id,
                                                       batch_size=2,
-                                                      num_nano_batch=2,
-                                                      relabel_nodes=True)
+                                                      num_nano_batch=2)
     histories = torch.nn.ModuleList([
         History(cacheid, len(n_id), hidden_channels, device)
         for cacheid in cached_id
@@ -102,8 +101,7 @@ def test_gradient(device):
     nano_batchs, cached_id = get_nano_batch_histories(adjs,
                                                       mb_n_id,
                                                       batch_size=2,
-                                                      num_nano_batch=2,
-                                                      relabel_nodes=True)
+                                                      num_nano_batch=2)
     histories = torch.nn.ModuleList([
         History(cacheid, node_num, hidden_channels, device)
         for cacheid in cached_id
@@ -138,8 +136,7 @@ def test_small_save_embedding():
     nano_batchs, cached_id = get_nano_batch_histories(adjs,
                                                       mb_n_id,
                                                       batch_size=2,
-                                                      num_nano_batch=2,
-                                                      relabel_nodes=True)
+                                                      num_nano_batch=2)
 
     histories = torch.nn.ModuleList([
         History(cacheid, node_num, hidden_channels, 'cpu')
@@ -177,8 +174,7 @@ def test_small_histfunction():
     nano_batchs, cached_id = get_nano_batch_histories(adjs,
                                                       mb_n_id,
                                                       batch_size=2,
-                                                      num_nano_batch=2,
-                                                      relabel_nodes=True)
+                                                      num_nano_batch=2)
     histories = torch.nn.ModuleList([
         History(cacheid, node_num, hidden_channels, 'cpu')
         for cacheid in cached_id
@@ -224,8 +220,7 @@ def test_small_pull():
     nano_batchs, cached_id = get_nano_batch_histories(adjs,
                                                       mb_n_id,
                                                       batch_size=2,
-                                                      num_nano_batch=2,
-                                                      relabel_nodes=True)
+                                                      num_nano_batch=2)
     histories = torch.nn.ModuleList([
         History(cacheid, node_num, hidden_channels, 'cpu')
         for cacheid in cached_id
@@ -278,8 +273,7 @@ def test_small_push():
     nano_batchs, cached_id = get_nano_batch_histories(adjs,
                                                       mb_n_id,
                                                       batch_size=2,
-                                                      num_nano_batch=2,
-                                                      relabel_nodes=True)
+                                                      num_nano_batch=2)
     histories = torch.nn.ModuleList([
         History(cacheid, node_num, hidden_channels, 'cpu')
         for cacheid in cached_id
@@ -329,8 +323,7 @@ def test_init_history():
     nano_batchs, cached_id = get_nano_batch_histories(adjs,
                                                       mb_n_id,
                                                       batch_size=2,
-                                                      num_nano_batch=2,
-                                                      relabel_nodes=True)
+                                                      num_nano_batch=2)
     histories = torch.nn.ModuleList([
         History(cacheid, node_num, hidden_channels, 'cpu')
         for cacheid in cached_id

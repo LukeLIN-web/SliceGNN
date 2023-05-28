@@ -147,8 +147,7 @@ def test_real_dataset(device):
         nano_batchs, cached_id = get_nano_batch_histories(adjs,
                                                           n_id,
                                                           batch_size=2,
-                                                          num_nano_batch=2,
-                                                          relabel_nodes=True)
+                                                          num_nano_batch=2)
         histories = torch.nn.ModuleList([
             History(cacheid, len(n_id), hidden_channels, device)
             for cacheid in cached_id

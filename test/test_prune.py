@@ -31,8 +31,7 @@ def test_forward():
     nano_batchs, cached_id = get_nano_batch_histories(adjs,
                                                       mb_n_id,
                                                       batch_size=2,
-                                                      num_nano_batch=2,
-                                                      relabel_nodes=True)
+                                                      num_nano_batch=2)
     histories = torch.nn.ModuleList([
         History(cacheid, node_num, hidden_channels, 'cpu')
         for cacheid in cached_id
@@ -76,8 +75,7 @@ def test_prune_computatition_graph():
     nano_batchs, cached_id = get_nano_batch_histories(adjs,
                                                       mb_n_id,
                                                       batch_size=2,
-                                                      num_nano_batch=2,
-                                                      relabel_nodes=True)
+                                                      num_nano_batch=2)
     histories = torch.nn.ModuleList([
         History(cacheid, node_num, hidden_channels, 'cpu')
         for cacheid in cached_id

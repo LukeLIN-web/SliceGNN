@@ -1,12 +1,10 @@
 import torch
 from torch import Tensor
-from torch_geometric.data import Data
-from torch_geometric.loader import NeighborLoader, NeighborSampler
+from torch_geometric.loader import NeighborSampler
 from torch_geometric.nn.conv import SAGEConv
 
 from microGNN.models import SAGE
-from microGNN.utils import (get_loader_nano_batch, get_nano_batch,
-                            get_nano_batch_histories, slice_adj)
+from microGNN.utils import get_nano_batch, get_nano_batch_histories, slice_adj
 from microGNN.utils.common_class import Adj, Nanobatch
 
 hop = [-1, -1]
@@ -105,8 +103,7 @@ def test_cache_id():
     nano_batchs, cached_id = get_nano_batch_histories(adjs,
                                                       mb_n_id,
                                                       batch_size=2,
-                                                      num_nano_batch=2,
-                                                      relabel_nodes=True)
+                                                      num_nano_batch=2)
     assert len(cached_id) == 1
     assert cached_id[0] == torch.tensor(3)
 
