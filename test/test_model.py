@@ -35,7 +35,7 @@ def test_sageacc():
         sizes=[-1],
         batch_size=2048,
         shuffle=False,
-        num_workers=6,
+        num_workers=2,
     )
 
     num_layers = 2
@@ -124,7 +124,7 @@ def test_real_dataset(device):
                                    node_idx=train_idx,
                                    batch_size=1024,
                                    shuffle=False,
-                                   num_workers=12)
+                                   num_workers=2)
     subgraph_loader = NeighborSampler(
         data.edge_index,
         node_idx=None,

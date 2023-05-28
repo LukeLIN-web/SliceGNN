@@ -170,7 +170,7 @@ def test_forward():
         sizes=hop,
         batch_size=4,
         shuffle=False,
-        num_workers=6,
+        num_workers=0,
         drop_last=True,
     )
     model = SAGE(num_features, hidden_channels, out_channels)
@@ -191,7 +191,7 @@ def test_forward():
         sizes=[-1],
         batch_size=6,
         shuffle=False,
-        num_workers=6,
+        num_workers=0,
         drop_last=True,
     )
     for batch_size, n_id, adjs in train_loader:
