@@ -9,7 +9,7 @@ inputs:
     default: '1.13.1'
   cuda-version:
     required: false
-    default: cpu
+    default: 'cu113'
   torchvision-version:
     required: false
     default: '0.14.1'
