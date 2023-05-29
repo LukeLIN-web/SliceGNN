@@ -3,7 +3,7 @@ num_epoch: 5
 nano_pergpu: 2
 num_train_worker: 1
 num_sample_worker: 1
-
+queue_size: 100
 
 defaults:
   - dataset: ogbn-products

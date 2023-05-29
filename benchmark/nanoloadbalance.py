@@ -47,13 +47,14 @@ def run_sample(worker_id, run_config, quiver_sampler):
     conf = run_config['conf']
     params = run_config['params']
     ratio = run_config['ratio']
-    torch.cuda.set_device(ctx)
+
     data = run_config['dataset'][0]
     nano_queues = run_config['queue']
     num_nano = conf.num_sample_worker + ratio * conf.num_train_worker
     mq_sem = run_config['mq_sem']
     sampler_stop_event = run_config['sampler_stop_event'][worker_id]
     ctx = run_config['sample_workers'][worker_id]
+    torch.cuda.set_device(ctx)
 
     print('[Sample Worker {:d}/{:d}] Started with PID {:d} Device {:s}'.format(
         worker_id, conf.num_sample_worker, os.getpid(), ctx))
@@ -113,10 +114,9 @@ def run_train(worker_id, run_config, x, trainer_type):
     torch.cuda.set_device(train_device)
     print(
         '[{:10s} Worker  {:d}/{:d}] Started with PID {:d} Train Device '.
-        format(
-            trainer_type.name, worker_id,
-            run_config['num_train_worker'] + run_config['num_sample_worker'],
-            os.getpid()), train_device)
+        format(trainer_type.name,
+               worker_id, conf.num_train_worker + conf.num_sample_worker,
+               os.getpid()), train_device)
 
     num_features, num_classes = dataset.num_features, dataset.num_classes
     model = SAGE(num_features, params.hidden_channels, num_classes)
@@ -153,7 +153,7 @@ def run_train(worker_id, run_config, x, trainer_type):
     for epoch in range(1, conf.num_epoch + 1):
         model.train()
         while mq_sem.acquire(timeout=0.01):
-            (n_id, nano_batchs) = queue.get()
+            (n_id, nano_batchs) = queue.get()  #
             epoch_start = default_timer()
             optimizer.zero_grad()
             target_node = n_id[:batch_size][worker_id *

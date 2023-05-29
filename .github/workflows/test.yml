@@ -17,6 +17,7 @@ jobs:
 
       - name: Install main package
         run: |
+          pip install torch_geometric==2.3.0
           pip install torch-quiver
           pip install pytest ogb
           pip install .
