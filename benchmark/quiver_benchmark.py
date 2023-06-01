@@ -9,9 +9,8 @@ from omegaconf import OmegaConf
 from torch_geometric.loader import NeighborSampler
 from utils import get_model
 
-from microGNN import History
 from microGNN.models import criterion
-from microGNN.utils import cal_metrics, get_dataset, get_nano_batch_histories
+from microGNN.utils import cal_metrics, get_dataset
 
 log = logging.getLogger(__name__)
 
@@ -24,9 +23,22 @@ def train(conf):
     print(OmegaConf.to_yaml(conf))
     dataset = get_dataset(dataset_name, conf.root)
     data = dataset[0]
+
     rank = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
     torch.cuda.set_device(rank)
     torch.manual_seed(12345)
+    gpu_num, per_gpu, layers = conf.num_train_worker, conf.nano_pergpu, len(
+        params.hop)
+    model_params = {
+        'inputs_channels': data.num_features,
+        'hidden_channels': params.hidden_channels,
+        'output_channels': dataset.num_classes,
+        'num_layers': layers,
+    }
+    if conf.model.name == "gat":
+        model_params['num_heads'] = params.heads
+
+    model = get_model(conf.model.name, model_params, scale=False).to(rank)
     csr_topo = quiver.CSRTopo(data.edge_index)
     quiver_sampler = quiver.pyg.GraphSageSampler(csr_topo,
                                                  sizes=params.hop,
@@ -40,6 +52,7 @@ def train(conf):
     feature = torch.zeros(data.x.shape)
     feature[:] = data.x
     x.from_cpu_tensor(feature)
+    y = data.y.to(rank)
 
     if dataset_name == "ogbn-products" or dataset_name == "papers100M":
         split_idx = dataset.get_idx_split()
@@ -50,8 +63,6 @@ def train(conf):
         )
     else:
         train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
-    gpu_num, per_gpu, layers = conf.num_train_worker, conf.nano_pergpu, len(
-        params.hop)
     train_loader = torch.utils.data.DataLoader(train_idx,
                                                batch_size=params.batch_size *
                                                gpu_num,
@@ -63,27 +74,13 @@ def train(conf):
     #         data.edge_index,
     #         node_idx=None,
     #         sizes=[-1],
-    #         batch_size=2048,
+    #         batch_size=1024,
     #         shuffle=False,
     #         num_workers=14,
     #     )
-    model_params = {
-        'inputs_channels': data.num_features,
-        'hidden_channels': params.hidden_channels,
-        'output_channels': dataset.num_classes,
-        'num_layers': layers,
-    }
-    if conf.model.name == "gat":
-        emb_dim = params.hidden_channels * params.heads
-        model_params['num_heads'] = params.heads
-    else:
-        emb_dim = params.hidden_channels
-    model = get_model(conf.model.name, model_params, scale=True).to(rank)
     optimizer = torch.optim.Adam(model.parameters(), lr=params.lr)
-    y = data.y.to(rank)
     epochtimes = []
     acc3 = -1
-
     for epoch in range(1, conf.num_epoch + 1):
         model.train()
         epoch_start = default_timer()
@@ -91,30 +88,25 @@ def train(conf):
             optimizer.zero_grad()
             n_id, batch_size, adjs = quiver_sampler.sample(seeds)
             target_node = n_id[:batch_size]
-            nano_batchs, cached_id = get_nano_batch_histories(
-                adjs, n_id, batch_size)
-            histories = torch.nn.ModuleList([
-                History(cacheid, len(n_id), emb_dim, rank)
-                for cacheid in cached_id
-            ])
-            for i, nb in enumerate(nano_batchs):
-                adjs = [adj.to(rank) for adj in nb.adjs]
-                nbid = nb.n_id.to(rank)
-                out = model(x[n_id][nb.n_id], nbid, adjs, histories)
-                loss = criterion(
-                    out, y[target_node][i * (nb.size):(i + 1) * (nb.size)],
-                    dataset_name)
-                loss.backward()
+            adjs = [adj.to(rank) for adj in adjs]
+            out = model(x[n_id].to(rank), adjs)
+            loss = criterion(
+                out,
+                y[target_node],
+                dataset_name,
+            )
+            loss.backward()
             optimizer.step()
         epochtime = default_timer() - epoch_start
         if epoch > 1:
             epochtimes.append(epochtime)
         print(f"Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {epochtime}")
     maxgpu = torch.cuda.max_memory_allocated() / 10**9
+    print(f"max gpu memory {maxgpu:.2f} GB")
     metric = cal_metrics(epochtimes)
     log.log(
         logging.INFO,
-        f',scale+{conf.model.name},{dataset_name},{gpu_num * per_gpu},{layers},{metric["mean"]:.2f},{params.batch_size}, {maxgpu:.2f}',
+        f',origin,{dataset_name},{gpu_num * per_gpu},{layers},{metric["mean"]:.2f},{params.batch_size} ,{maxgpu:.2f}',
     )
 
     # model.eval()
@@ -152,7 +144,7 @@ def train(conf):
     # metric = cal_metrics(epochtimes)
     # log.log(
     #     logging.INFO,
-    #     f',scale+{conf.model.name},{dataset_name},{gpu_num * per_gpu},{layers},{metric["mean"]:.2f},{params.batch_size}, {maxgpu:.2f}, {acc3:.4f}',
+    #     f',origin,{dataset_name},{gpu_num * per_gpu},{layers},{metric["mean"]:.2f}, {maxgpu:.2f}, {acc3:.4f}',
     # )
 
 

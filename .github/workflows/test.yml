@@ -5,38 +5,24 @@ on:
 jobs:
   container-test-job:
     runs-on: ubuntu-latest
-    container:
-      image: 1263810658/pyg2.1-torch1.10-cuda11.3
-      env:
-        NODE_ENV: development
-      ports:
-        - 80
-      volumes:
-        - my_docker_volume:/volume_mount
-      options: -v ${{ github.workspace }}:/work
     steps:
-      - name: Check for dockerenv file
-        run: (ls /.dockerenv && echo Found dockerenv) || (echo No dockerenv)
-      - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
-      - run: echo "🐧 This job is now running on a ${{ runner.os }} server hosted by GitHub!"
-      - run: echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
       - name: Check out repository code
         uses: actions/checkout@v3
-      - run: echo "💡 The ${{ github.repository }} repository has been cloned to the runner."
-      - run: echo "🖥️ The workflow is now ready to test your code on the runner."
+        with:
+          fetch-depth: 40
 
-      - name: List files in the repository
-        run: |
-          pwd
-          #ls ${{ github.workspace }}
-          ls
+      - name: Setup packages
+        if: steps.changed-files-specific.outputs.only_changed != 'true'
+        uses: ./.github/actions/setup
 
       - name: Install main package
         run: |
-          pip install -e .
+          pip install torch_geometric==2.3.0
+          pip install torch-quiver
+          pip install pytest ogb
+          pip install .
 
       - name: test
         run: |
-          pip install pytest ogb
           pytest
       - run: echo "🍏 This job's status is ${{ job.status }}."

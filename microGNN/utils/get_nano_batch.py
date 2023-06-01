@@ -1,8 +1,10 @@
+from timeit import default_timer as timer
 from typing import List, Optional, Tuple, Union
 
 import torch
 from torch import Tensor
 from torch_geometric.data import Data
+from torch_geometric.utils import trim_to_layer
 from torch_geometric.utils.num_nodes import maybe_num_nodes
 
 from microGNN.utils.common_class import Adj, Nanobatch
@@ -66,9 +68,9 @@ def slice_adj(
     node_mask[node_idx] = True
     torch.index_select(node_mask, 0, target, out=edge_mask)  # select edge
     subsets = [node_idx, source[edge_mask]]
-    # remove all target nodes from array.
+    # remove all target nodes from subsets[1].
     # subsets[0] is the target nodes , and we need place it at first.
-    mask = torch.isin(subsets[1], subsets[0])
+    mask = torch.isin(subsets[1], subsets[0])  # bottleneck
     subsets[1] = subsets[1][~mask]
     subset = subsets[1].unique()
     subset = torch.cat((subsets[0], subset), 0)
@@ -117,7 +119,7 @@ def get_nano_batch(
     if not isinstance(adjs, list):
         adjs = [adjs]
     adjs.reverse()
-    nano_batch_size = batch_size // num_nano_batch  # TODO: padding last batch
+    nano_batch_size = batch_size // num_nano_batch
     nano_batchs = []
     for i in range(num_nano_batch):
         sub_nid = n_id[i * nano_batch_size:(i + 1) *
@@ -153,7 +155,7 @@ def get_loader_nano_batch(batch: Data, num_nano_batch: int,
     if mod != 0:
         batch_size -= mod
     assert batch_size % num_nano_batch == 0
-    nano_batch_size = batch_size // num_nano_batch  # TODO: padding last batch
+    nano_batch_size = batch_size // num_nano_batch
     nano_batchs = []
     for i in range(num_nano_batch):
         sub_nid = n_id[i * nano_batch_size:(i + 1) *
@@ -208,3 +210,58 @@ def get_nano_batch_withlayer(
             subnids.append(sub_nid)  # layer 0 is interal
         nanobatchs.append(subnids)
     return nanobatchs
+
+
+def get_nano_batch_histories(
+    adjs: List[Adj],
+    n_id: Tensor,
+    batch_size: int,
+    num_nano_batch: int = 2,
+):
+    r"""Create a list of `num_nano_batch` nanobatches
+    from a list of adjacency matrices `adjs`.
+
+    Args:
+        adjs (List[Adj]): List of each layer adjacency matrices.
+        n_id (torch.Tensor): Node indices.
+        batch_size: mini batch size
+        num_nano_batch:  nano batch number
+    """
+    assert (batch_size >= num_nano_batch
+            ), "batch_size must be bigger than num_nano_batch"  # noqa
+    mod = batch_size % num_nano_batch
+    if mod != 0:
+        batch_size -= mod
+    assert batch_size % num_nano_batch == 0, "batch_size must be divisible by num_nano_batch"
+    assert isinstance(adjs, list), "adjs must be a list"
+    adjs.reverse()
+    nano_batch_size = batch_size // num_nano_batch
+    nano_batchs = []
+    num_layers = len(adjs)
+    pin_memory = n_id.device is None or str(n_id.device) == "cpu"
+    cached_nodes = torch.full((num_layers - 1, len(n_id)),
+                              False,
+                              dtype=torch.bool,
+                              device=n_id.device,
+                              pin_memory=pin_memory)
+    cached_id = [[] for i in range(num_layers - 1)]
+    n_id = torch.arange(len(n_id))  # relabel for mini batch
+    for i in range(num_nano_batch):
+        sub_nid = n_id[i * nano_batch_size:(i + 1) * nano_batch_size]
+        subadjs = []
+        for j, adj in enumerate(adjs):
+            target_size = len(sub_nid)
+            sub_nid, sub_adjs, _ = slice_adj(
+                sub_nid,
+                adj.edge_index,
+                relabel_nodes=True,
+            )  # bottleneck
+            if j != num_layers - 1:
+                cache_mask = torch.logical_not(cached_nodes[j][sub_nid])
+                cached_nodes[j][sub_nid[cache_mask]] = True  # bottleneck
+                cached_id[j].append(sub_nid[torch.logical_not(cache_mask)])
+            subadjs.append(Adj(sub_adjs, None, (len(sub_nid), target_size)))
+        subadjs.reverse()  # O(n) 大的在前面
+        nano_batchs.append(Nanobatch(sub_nid, nano_batch_size, subadjs))
+    cached_tensor = [torch.cat(ids) for ids in cached_id]
+    return nano_batchs, cached_tensor

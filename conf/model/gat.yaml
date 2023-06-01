@@ -1,21 +1,23 @@
-name: sage
+name: gat
+
 params:
   reddit:
     hop: [25, 10]
     batch_size: 1024
-    lr: 0.01
-    hidden_channels: 256
+    lr: 0.001
+    hidden_channels: 128
+    heads: 4
 
   yelp:
     hop: [25, 10]
     batch_size: 1024
-    lr: 0.01
 
   ogbn-products:
     hop: [10, 10, 10]
-    batch_size: 1024
-    lr: 0.01
-    hidden_channels: 256
+    batch_size: 512
+    lr: 0.001
+    hidden_channels: 128
+    heads: 4
 
   papers100M:
     hop: [15, 10, 5]

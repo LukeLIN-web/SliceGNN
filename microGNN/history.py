@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List
 
 import torch
 from torch import Tensor
@@ -7,24 +7,39 @@ from torch import Tensor
 class History(torch.nn.Module):
     r"""A historical embedding storage module."""
 
-    def __init__(self, num_embeddings: int, embedding_dim: int, device=None):
+    def __init__(self,
+                 cached_id: Tensor,
+                 num_embeddings: int,
+                 embedding_dim: int,
+                 device=None):
         super().__init__()
 
         self.num_embeddings = num_embeddings
         self.embedding_dim = embedding_dim
 
         pin_memory = device is None or str(device) == "cpu"
-        self.emb = torch.empty(num_embeddings,
+        self.emb_idx = torch.full(
+            (num_embeddings, ),
+            -1,
+            dtype=torch.long,
+            device=device,
+            pin_memory=pin_memory)  # corrsponding index in self.emb
+
+        cached_id = cached_id.to(device)
+        values = torch.arange(len(cached_id), device=device)
+        self.emb_idx.scatter_(0, cached_id, values)
+
+        self.emb = torch.empty(len(cached_id),
                                embedding_dim,
                                device=device,
                                pin_memory=pin_memory)
-        self.cached_nodes = torch.full((num_embeddings, ),
-                                       False,
-                                       dtype=torch.bool,
-                                       device=device,
-                                       pin_memory=pin_memory)
 
-        self._device = torch.device("cpu")
+        self.cached_nodes = torch.full(
+            (num_embeddings, ),
+            False,
+            dtype=torch.bool,
+            device=device,
+            pin_memory=pin_memory)  # pushed embedding or not
 
         self.reset_parameters()
 
@@ -32,40 +47,30 @@ class History(torch.nn.Module):
         self.emb.fill_(0)
         self.cached_nodes.fill_(False)
 
-    def _apply(self, fn):
-        # Set the `_device` of the module without transfering `self.emb`.
-        self._device = fn(torch.zeros(1)).device
-        return self
+    def pull_push(self, x: Tensor, inter_id: Tensor):
+        self.pull(x, inter_id)
+        self.push(x, inter_id)
+
+    def pull(self, x: Tensor, target_id: Tensor) -> Tensor:
+        is_cached = self.cached_nodes[target_id]
+        cached_id = target_id[is_cached]  # bottleneck
+        emb_indices = self.emb_idx[cached_id]
+        embeddings = self.emb[emb_indices]
+        out = x.clone()
+        out[is_cached] = embeddings
+        return out
 
     @torch.no_grad()
-    def pull(self, x: Tensor, n_id: Tensor) -> Tensor:
-        cached_nodes = self.cached_nodes[
-            n_id]  # get cached_nodes for the given node ids
-        emb = self.emb[n_id]  # get embeddings for the cached nodes
-        cached_nodes = cached_nodes.unsqueeze(1).expand(
-            x.size(0), x.size(1))  # expand to the same shape as x
-        out = torch.where(
-            cached_nodes, emb,
-            x)  # replace the values of cached nodes in x with their embeddings
-        return out.to(device=x.device)
-
-    @torch.no_grad()
-    def push(
-        self,
-        x: Tensor,
-        n_id: Tensor,
-    ):
-
-        if n_id is None and x.size(0) != self.num_embeddings:
-            raise ValueError
-
-        assert n_id.device == self.emb.device
-        self.emb[n_id] = x.to(self.emb.device)
-        self.cached_nodes[n_id] = True
+    def push(self, x: Tensor, target_id: Tensor) -> Tensor:
+        should_cache = (self.emb_idx[target_id] != -1)
+        tocacheid = target_id[should_cache]
+        emb_indices = self.emb_idx[tocacheid]
+        self.emb[emb_indices] = x[should_cache]
+        self.cached_nodes[tocacheid] = True
 
     def forward(self, *args, **kwargs):
         """"""
-        raise NotImplementedError  # hisotry不是model,只是用了数据结构.
+        raise NotImplementedError  # history is not model, only use for storage
 
     def __repr__(self) -> str:
         return (f"{self.__class__.__name__}({self.num_embeddings}, "

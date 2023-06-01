@@ -1,4 +1,14 @@
 import numpy as np
+import torch
+
+
+# Use this function to monitor GPU memory usage
+def check_memory():
+    print(
+        f"GPU memory usage: {torch.cuda.memory_allocated() / 1024**2 : 2f} MB")
+    print(
+        f"GPU memory reserved: {torch.cuda.memory_reserved() / 1024**2 : 2f} MB"
+    )
 
 
 def cal_metrics(arr: list) -> dict:
