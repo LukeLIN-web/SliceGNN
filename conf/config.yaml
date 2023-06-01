@@ -1,12 +1,12 @@
 dropout: 0.5
 num_epoch: 5
-nano_pergpu: 2
+nano_pergpu: 4
 num_train_worker: 1
 num_sample_worker: 1
 queue_size: 100
 
 defaults:
-  - dataset: ogbn-products
+  - dataset: reddit  #ogbn-products
   - model: sage
 
 root: "/data/ogb"

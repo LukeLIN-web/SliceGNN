@@ -2,13 +2,13 @@ import logging
 from timeit import default_timer
 
 import hydra
+import quiver
 import torch
 from ogb.nodeproppred import Evaluator
 from omegaconf import OmegaConf
 from torch_geometric.loader import NeighborSampler
 from utils import get_model
 
-import quiver
 from microGNN import History
 from microGNN.models import criterion
 from microGNN.utils import cal_metrics, get_dataset, get_nano_batch_histories
@@ -80,7 +80,7 @@ def train(conf):
         emb_dim = params.hidden_channels
     model = get_model(conf.model.name, model_params, scale=True).to(rank)
     optimizer = torch.optim.Adam(model.parameters(), lr=params.lr)
-    y = data.y
+    y = data.y.to(rank)
     epochtimes = []
     acc3 = -1
 
@@ -102,8 +102,7 @@ def train(conf):
                 nbid = nb.n_id.to(rank)
                 out = model(x[n_id][nb.n_id], nbid, adjs, histories)
                 loss = criterion(
-                    out,
-                    y[target_node][i * (nb.size):(i + 1) * (nb.size)].to(rank),
+                    out, y[target_node][i * (nb.size):(i + 1) * (nb.size)],
                     dataset_name)
                 loss.backward()
             optimizer.step()

@@ -53,7 +53,7 @@ class History(torch.nn.Module):
 
     def pull(self, x: Tensor, target_id: Tensor) -> Tensor:
         is_cached = self.cached_nodes[target_id]
-        cached_id = target_id[is_cached]
+        cached_id = target_id[is_cached]  # bottleneck
         emb_indices = self.emb_idx[cached_id]
         embeddings = self.emb[emb_indices]
         out = x.clone()

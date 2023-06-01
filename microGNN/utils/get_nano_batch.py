@@ -1,8 +1,10 @@
+from timeit import default_timer as timer
 from typing import List, Optional, Tuple, Union
 
 import torch
 from torch import Tensor
 from torch_geometric.data import Data
+from torch_geometric.utils import trim_to_layer
 from torch_geometric.utils.num_nodes import maybe_num_nodes
 
 from microGNN.utils.common_class import Adj, Nanobatch
@@ -68,7 +70,7 @@ def slice_adj(
     subsets = [node_idx, source[edge_mask]]
     # remove all target nodes from subsets[1].
     # subsets[0] is the target nodes , and we need place it at first.
-    mask = torch.isin(subsets[1], subsets[0])
+    mask = torch.isin(subsets[1], subsets[0])  # bottleneck
     subsets[1] = subsets[1][~mask]
     subset = subsets[1].unique()
     subset = torch.cat((subsets[0], subset), 0)
@@ -249,14 +251,14 @@ def get_nano_batch_histories(
         subadjs = []
         for j, adj in enumerate(adjs):
             target_size = len(sub_nid)
-            sub_nid, sub_adjs, edge_mask = slice_adj(
+            sub_nid, sub_adjs, _ = slice_adj(
                 sub_nid,
                 adj.edge_index,
                 relabel_nodes=True,
-            )
+            )  # bottleneck
             if j != num_layers - 1:
                 cache_mask = torch.logical_not(cached_nodes[j][sub_nid])
-                cached_nodes[j][sub_nid[cache_mask]] = True
+                cached_nodes[j][sub_nid[cache_mask]] = True  # bottleneck
                 cached_id[j].append(sub_nid[torch.logical_not(cache_mask)])
             subadjs.append(Adj(sub_adjs, None, (len(sub_nid), target_size)))
         subadjs.reverse()  # O(n) 大的在前面

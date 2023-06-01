@@ -105,6 +105,7 @@ def test_cache_id():
                                                       batch_size=2,
                                                       num_nano_batch=2)
     assert len(cached_id) == 1
+    print(cached_id[0])
     assert cached_id[0] == torch.tensor(3)
 
 

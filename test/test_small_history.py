@@ -1,3 +1,5 @@
+from timeit import default_timer as timer
+
 import torch
 import torch.nn.functional as F
 from torch_geometric.loader import NeighborSampler
@@ -7,7 +9,7 @@ from torch_geometric.testing.decorators import withCUDA
 from microGNN import History
 from microGNN.models import SAGE, ScaleSAGE
 from microGNN.prune import prune_computation_graph
-from microGNN.utils import get_intersection, get_nano_batch_histories
+from microGNN.utils import get_nano_batch_histories
 from microGNN.utils.common_class import Adj
 
 hop = [-1, -1]
@@ -24,7 +26,6 @@ edge_index = torch.tensor([[2, 3, 3, 4, 5, 6, 7],
 # yapf: enable
 torch.manual_seed(23)
 mb_n_id = torch.arange(node_num)
-from torch_geometric.testing.decorators import withCUDA
 
 
 @withCUDA

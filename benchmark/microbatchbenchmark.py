@@ -2,13 +2,13 @@ import logging
 from timeit import default_timer
 
 import hydra
+import quiver
 import torch
 from ogb.nodeproppred import Evaluator
 from omegaconf import OmegaConf
 from torch_geometric.loader import NeighborSampler
 from utils import get_model
 
-import quiver
 from microGNN.models import criterion
 from microGNN.utils import cal_metrics, get_dataset, get_nano_batch
 
@@ -56,15 +56,15 @@ def train(conf):
                                                num_workers=14,
                                                shuffle=False,
                                                drop_last=True)
-    if dataset_name != "papers100M":
-        subgraph_loader = NeighborSampler(
-            data.edge_index,
-            node_idx=None,
-            sizes=[-1],
-            batch_size=2048,
-            shuffle=False,
-            num_workers=14,
-        )
+    # if dataset_name != "papers100M":
+    #     subgraph_loader = NeighborSampler(
+    #         data.edge_index,
+    #         node_idx=None,
+    #         sizes=[-1],
+    #         batch_size=2048,
+    #         shuffle=False,
+    #         num_workers=14,
+    #     )
 
     model_params = {
         'inputs_channels': data.num_features,
@@ -77,7 +77,7 @@ def train(conf):
 
     model = get_model(conf.model.name, model_params, scale=False).to(rank)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-    y = data.y
+    y = data.y.to(rank)
     epochtimes = []
     acc3 = -1
     for epoch in range(1, conf.num_epoch + 1):
@@ -95,7 +95,7 @@ def train(conf):
                 loss = criterion(
                     out,
                     y[target_node][i * (nano_batch.size):(i + 1) *
-                                   (nano_batch.size)].to(rank),
+                                   (nano_batch.size)],
                     dataset_name,
                 )
                 loss.backward()
@@ -105,7 +105,6 @@ def train(conf):
             epochtimes.append(epochtime)
         print(f"Epoch: {epoch:03d}, Loss: {loss:.4f}, Epoch Time: {epochtime}")
     maxgpu = torch.cuda.max_memory_allocated() / 10**9
-    print("train finished")
     metric = cal_metrics(epochtimes)
     log.log(
         logging.INFO,
