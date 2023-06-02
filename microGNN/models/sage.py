@@ -115,23 +115,22 @@ class ScaleSAGE(torch.nn.Module):
         return x_all
 
 
-# use for neighborloader
 class loaderSAGE(torch.nn.Module):
 
     def __init__(self,
-                 in_channels: int,
-                 hidden_channels: int,
-                 out_channels: int,
-                 num_layers: int = 2):
+                 in_channels,
+                 hidden_channels,
+                 out_channels,
+                 num_layers=2):
         super().__init__()
-
         self.convs = torch.nn.ModuleList()
         self.convs.append(SAGEConv(in_channels, hidden_channels))
-        for _ in range(num_layers - 2):
+        self.num_layers = num_layers
+        for _ in range(self.num_layers - 2):
             self.convs.append(SAGEConv(hidden_channels, hidden_channels))
         self.convs.append(SAGEConv(hidden_channels, out_channels))
 
-    def forward(self, x: Tensor, edge_index: Tensor) -> Tensor:
+    def forward(self, x, edge_index):
         for i, conv in enumerate(self.convs):
             x = conv(x, edge_index)
             if i < len(self.convs) - 1:
@@ -140,17 +139,14 @@ class loaderSAGE(torch.nn.Module):
         return x
 
     @torch.no_grad()
-    def inference(self, x_all: Tensor, device: torch.device,
-                  subgraph_loader: NeighborLoader) -> Tensor:
-
+    def inference(self, x_all, subgraph_loader, device):
         for i, conv in enumerate(self.convs):
             xs = []
             for batch in subgraph_loader:
-                x = x_all[batch.node_id.to(x_all.device)].to(device)
+                x = x_all[batch.n_id.to(x_all.device)].to(device)
                 x = conv(x, batch.edge_index.to(device))
-                x = x[:batch.batch_size]
                 if i < len(self.convs) - 1:
                     x = x.relu_()
-                xs.append(x.cpu())
+                xs.append(x[:batch.batch_size].cpu())
             x_all = torch.cat(xs, dim=0)
         return x_all

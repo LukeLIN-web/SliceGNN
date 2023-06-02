@@ -1,14 +1,16 @@
+import copy
 from timeit import default_timer
 
 import quiver
 import torch
 import torch.nn.functional as F
 from torch_geometric.datasets import Planetoid
-from torch_geometric.loader import NeighborSampler
+from torch_geometric.loader import NeighborLoader, NeighborSampler
 from torch_geometric.testing.decorators import onlyCUDA, withCUDA
+from tqdm import tqdm
 
 from microGNN import History
-from microGNN.models import SAGE, ScaleSAGE
+from microGNN.models import SAGE, ScaleSAGE, loaderSAGE
 from microGNN.utils import (get_dataset, get_nano_batch,
                             get_nano_batch_histories)
 
@@ -72,7 +74,56 @@ def test_sageacc():
 
 
 @onlyCUDA
-def test_acc():
+def test_loader():
+    device = torch.device("cuda:0")
+    dataset = get_dataset("reddit", "/data/")
+    data = dataset[0].to(device, 'x', 'y')
+    train_loader = NeighborLoader(data,
+                                  input_nodes=data.train_mask,
+                                  num_neighbors=[25, 10],
+                                  batch_size=1024,
+                                  shuffle=True)
+    subgraph_loader = NeighborLoader(copy.copy(data),
+                                     input_nodes=None,
+                                     num_neighbors=[-1],
+                                     batch_size=1024,
+                                     shuffle=False)
+    # No need to maintain these features during evaluation:
+    del subgraph_loader.data.x, subgraph_loader.data.y
+    subgraph_loader.data.num_nodes = data.num_nodes
+    subgraph_loader.data.n_id = torch.arange(data.num_nodes)
+    model = loaderSAGE(
+        dataset.num_features,
+        hidden_channels=64,
+        out_channels=dataset.num_classes,
+        num_layers=2,
+    ).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    model.train()
+    for batch in train_loader:
+        optimizer.zero_grad()
+        batch = batch.to(device)
+
+        out = model(batch.x, batch.edge_index)
+
+        out = out[:batch.batch_size]
+        y = batch.y[:batch.batch_size]
+
+        loss = F.cross_entropy(out, y)
+        loss.backward()
+        optimizer.step()
+
+    model.eval()
+    y_hat = model.inference(data.x, subgraph_loader, device).argmax(dim=-1)
+    y = data.y.to(y_hat.device)
+
+    accs = []
+    for mask in [data.train_mask, data.val_mask, data.test_mask]:
+        accs.append(int((y_hat[mask] == y[mask]).sum()) / int(mask.sum()))
+
+
+@onlyCUDA
+def test_histories_speed():
     dataset = get_dataset("reddit", "/data/")
     data = dataset[0]
     csr_topo = quiver.CSRTopo(data.edge_index)
@@ -115,7 +166,7 @@ def test_acc():
 
 
 @withCUDA
-def test_real_dataset(device):
+def test_histories_sanity(device):
     dataset = Planetoid("/data/Planetoid", name="Cora")
     data = dataset[0]
     train_idx = data.train_mask.nonzero(as_tuple=False).view(-1)
@@ -173,5 +224,4 @@ def test_real_dataset(device):
 
 
 if __name__ == "__main__":
-    # test_acc()
-    test_real_dataset('cuda:0')
+    test_histories_sanity()
