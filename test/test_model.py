@@ -8,7 +8,6 @@ from torch_geometric.datasets import Planetoid
 from torch_geometric.loader import NeighborLoader, NeighborSampler
 from torch_geometric.nn.models.basic_gnn import GraphSAGE
 from torch_geometric.testing.decorators import onlyCUDA, withCUDA
-from tqdm import tqdm
 
 from microGNN import History
 from microGNN.models import SAGE, ScaleSAGE, loaderSAGE

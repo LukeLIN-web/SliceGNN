@@ -73,14 +73,12 @@ def train(conf):
         epoch_start = default_timer()
         for batch in train_loader:
             optimizer.zero_grad()
-            nano_batchs = get_loader_nano_batch(batch, num_nano_batch=2, hop=2)
-            for nano_batch in nano_batchs:
-                nano_batch.to(device)
-                out = model(nano_batch.x, nano_batch.edge_index)
-                out = out[:nano_batch.batch_size]
-                y = nano_batch.y[:nano_batch.batch_size]
-                loss = F.cross_entropy(out, y)
-                loss.backward()
+            batch.to(device)
+            out = model(batch.x, batch.edge_index)
+            out = out[:batch.batch_size]
+            y = batch.y[:batch.batch_size]
+            loss = F.cross_entropy(out, y)
+            loss.backward()
             optimizer.step()
         epochtime = default_timer() - epoch_start
         if epoch > 1:
