@@ -161,12 +161,12 @@ def get_loader_nano_batch(batch: Data, num_nano_batch: int,
         sub_nid = n_id[i * nano_batch_size:(i + 1) *
                        nano_batch_size]  # 从target node开始
         subset, edge_index, mapping, edge_mask = k_hop_subgraph(
-            sub_nid, hop, batch.edge_index, relabel_nodes=True)
+            sub_nid, hop, batch.edge_index, relabel_nodes=True)  # bottleneck
         nano_batchs.append(
             Data(x=batch.x[subset],
                  edge_index=edge_index,
                  y=batch.y[subset],
-                 batch_size=nano_batch_size))
+                 batch_size=nano_batch_size))  # bottleneck
     return nano_batchs
 
 
