@@ -6,12 +6,13 @@ import torch
 import torch.nn.functional as F
 from torch_geometric.datasets import Planetoid
 from torch_geometric.loader import NeighborLoader, NeighborSampler
+from torch_geometric.nn.models.basic_gnn import GraphSAGE
 from torch_geometric.testing.decorators import onlyCUDA, withCUDA
 from tqdm import tqdm
 
 from microGNN import History
 from microGNN.models import SAGE, ScaleSAGE, loaderSAGE
-from microGNN.utils import (get_dataset, get_nano_batch,
+from microGNN.utils import (get_dataset, get_loader_nano_batch, get_nano_batch,
                             get_nano_batch_histories)
 
 device = torch.device("cuda:0")
@@ -88,11 +89,9 @@ def test_loader():
                                      num_neighbors=[-1],
                                      batch_size=1024,
                                      shuffle=False)
-    # No need to maintain these features during evaluation:
-    del subgraph_loader.data.x, subgraph_loader.data.y
     subgraph_loader.data.num_nodes = data.num_nodes
     subgraph_loader.data.n_id = torch.arange(data.num_nodes)
-    model = loaderSAGE(
+    model = GraphSAGE(
         dataset.num_features,
         hidden_channels=64,
         out_channels=dataset.num_classes,
@@ -102,24 +101,26 @@ def test_loader():
     model.train()
     for batch in train_loader:
         optimizer.zero_grad()
-        batch = batch.to(device)
+        nano_batchs = get_loader_nano_batch(batch, num_nano_batch=2, hop=2)
+        for nano_batch in nano_batchs:
+            nano_batch.to(device)
+            out = model(nano_batch.x, nano_batch.edge_index)
+            out = out[:nano_batch.batch_size]
+            y = nano_batch.y[:nano_batch.batch_size]
 
-        out = model(batch.x, batch.edge_index)
-
-        out = out[:batch.batch_size]
-        y = batch.y[:batch.batch_size]
-
-        loss = F.cross_entropy(out, y)
-        loss.backward()
+            loss = F.cross_entropy(out, y)
+            loss.backward()
         optimizer.step()
+    print("Training done")
 
     model.eval()
-    y_hat = model.inference(data.x, subgraph_loader, device).argmax(dim=-1)
+    y_hat = model.inference(subgraph_loader, device).argmax(dim=-1)
     y = data.y.to(y_hat.device)
 
     accs = []
     for mask in [data.train_mask, data.val_mask, data.test_mask]:
         accs.append(int((y_hat[mask] == y[mask]).sum()) / int(mask.sum()))
+    assert accs[0] > 0.94, "Sanity check , Low training accuracy."
 
 
 @onlyCUDA
@@ -224,4 +225,4 @@ def test_histories_sanity(device):
 
 
 if __name__ == "__main__":
-    test_histories_sanity()
+    test_loader()
