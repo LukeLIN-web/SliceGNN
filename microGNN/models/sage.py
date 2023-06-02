@@ -3,6 +3,7 @@ from typing import List, Optional
 import torch
 import torch.nn.functional as F
 from torch import Tensor
+from torch_geometric.loader import NeighborLoader
 from torch_geometric.nn import SAGEConv
 
 from microGNN import History
@@ -115,7 +116,7 @@ class ScaleSAGE(torch.nn.Module):
 
 
 # use for neighborloader
-class newSAGE(torch.nn.Module):
+class loaderSAGE(torch.nn.Module):
 
     def __init__(self,
                  in_channels: int,
@@ -142,9 +143,6 @@ class newSAGE(torch.nn.Module):
     def inference(self, x_all: Tensor, device: torch.device,
                   subgraph_loader: NeighborLoader) -> Tensor:
 
-        # Compute representations of nodes layer by layer, using *all*
-        # available edges. This leads to faster computation in contrast to
-        # immediately computing the final representations of each batch:
         for i, conv in enumerate(self.convs):
             xs = []
             for batch in subgraph_loader:

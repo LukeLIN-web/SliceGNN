@@ -4,7 +4,7 @@ from typing import List, Optional, Tuple, Union
 import torch
 from torch import Tensor
 from torch_geometric.data import Data
-from torch_geometric.utils import trim_to_layer
+from torch_geometric.utils import k_hop_subgraph
 from torch_geometric.utils.num_nodes import maybe_num_nodes
 
 from microGNN.utils.common_class import Adj, Nanobatch
@@ -160,18 +160,9 @@ def get_loader_nano_batch(batch: Data, num_nano_batch: int,
     for i in range(num_nano_batch):
         sub_nid = n_id[i * nano_batch_size:(i + 1) *
                        nano_batch_size]  # 从target node开始
-        for i in range(hop):
-            sub_nid, sub_adjs, edge_mask = slice_adj(
-                sub_nid,
-                batch.edge_index,
-                relabel_nodes=True,
-            )
-            sub_batch = Data(
-                edge_index=sub_adjs,
-                n_id=sub_nid,
-                batch_size=nano_batch_size,
-            )
-        nano_batchs.append(sub_batch)
+        subset, edge_index, mapping, edge_mask = k_hop_subgraph(
+            sub_nid, hop, batch.edge_index, relabel_nodes=True)
+        nano_batchs.append(Data(x=batch.x[subset], edge_index=edge_index))
     return nano_batchs
 
 
