@@ -1,4 +1,4 @@
-# GNN Project
+# Slice GNN
 
 This project implements several key features for efficient Graph Neural Network (GNN) training:
 
