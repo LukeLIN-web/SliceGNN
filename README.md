@@ -18,3 +18,8 @@ torch_geometric 2.2.0
 torch-scatter          2.1.0
 torch-sparse           0.6.16
 ```
+## Reference
+
+https://arxiv.org/pdf/2406.00552
+
+https://arxiv.org/pdf/2303.13775 
