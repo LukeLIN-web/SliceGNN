@@ -1,15 +1,16 @@
 # GNN Project
-We implment `slice adj and get  nano batch` graph partition
 
-We implement pipeline using `torch.multiple_process.queue`
+This project implements several key features for efficient Graph Neural Network (GNN) training:
 
-We implement prune computation graph function.
+- **Graph Partitioning**: We implement `slice adj` and `get nano batch` for graph partitioning to optimize mini-batch processing.
+- **Pipeline with Multi-Processing**: A pipeline is implemented using `torch.multiprocessing.Queue` for parallel data handling and processing.
+- **Computation Graph Pruning**: A function to prune the computation graph is implemented to reduce unnecessary computations and improve efficiency.
+- **Comprehensive Testing**: We have written extensive tests to ensure the correctness and reliability of the code.
 
-We write many test to ensure the correctness of our code
+## Environment
 
+The project requires the following dependencies:
 
-
-# Env
 ```
 torch 1.11.0
 cuda_11.3
