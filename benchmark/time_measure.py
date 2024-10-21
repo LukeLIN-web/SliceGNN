@@ -2,13 +2,13 @@ import logging
 from timeit import default_timer
 
 import hydra
+import quiver
 import torch
 from ogb.nodeproppred import Evaluator
 from omegaconf import OmegaConf
 from torch_geometric.loader import NeighborSampler
 from utils import get_model
 
-import quiver
 from microGNN.models import criterion
 from microGNN.utils import cal_metrics, get_dataset
 
