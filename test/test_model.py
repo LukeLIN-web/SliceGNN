@@ -1,12 +1,12 @@
 from timeit import default_timer
 
+import quiver
 import torch
 import torch.nn.functional as F
 from torch_geometric.datasets import Planetoid
 from torch_geometric.loader import NeighborSampler
 from torch_geometric.testing.decorators import onlyCUDA, withCUDA
 
-import quiver
 from microGNN import History
 from microGNN.models import SAGE, ScaleSAGE
 from microGNN.utils import (get_dataset, get_nano_batch,

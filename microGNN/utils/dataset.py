@@ -1,5 +1,5 @@
-from torch_geometric.datasets import Reddit, Yelp, AmazonProducts
 from ogb.nodeproppred import PygNodePropPredDataset
+from torch_geometric.datasets import AmazonProducts, Reddit, Yelp
 
 
 def get_dataset(name, root, use_sparse_tensor=False, bf16=False):

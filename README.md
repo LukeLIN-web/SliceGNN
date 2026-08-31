@@ -22,4 +22,4 @@ torch-sparse           0.6.16
 
 https://arxiv.org/pdf/2406.00552
 
-https://arxiv.org/pdf/2303.13775 
+https://arxiv.org/pdf/2303.13775

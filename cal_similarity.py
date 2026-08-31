@@ -7,10 +7,10 @@ import itertools
 import logging
 
 import hydra
+import quiver
 import torch
 from omegaconf import OmegaConf
 
-import quiver
 from microGNN.utils import cal_metrics, get_dataset, get_nano_batch_withlayer
 
 log = logging.getLogger(__name__)
