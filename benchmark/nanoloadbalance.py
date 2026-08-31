@@ -3,13 +3,13 @@ import os
 from timeit import default_timer
 
 import hydra
+import quiver
 import torch
 import torch.multiprocessing as mp
 import torch.nn.functional as F
 from omegaconf import OmegaConf
 from torch_geometric.loader import NeighborSampler
 
-import quiver
 from microGNN.models import SAGE
 from microGNN.utils import cal_metrics, get_dataset, get_nano_batch
 from microGNN.utils.common_config import gpu
